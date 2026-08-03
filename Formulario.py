@@ -2,6 +2,9 @@ import json
 import os
 import sqlite3
 from io import BytesIO
+import openpyxl
+import pandas as pd
+import streamlit as st
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import (
@@ -9,9 +12,6 @@ from googleapiclient.http import (
     MediaIoBaseDownload,
     MediaIoBaseUpload,
 )
-import openpyxl
-import pandas as pd
-import streamlit as st
 
 st.set_page_config(
     page_title="Sistema de Inscripción 2026", page_icon="📝", layout="wide"
@@ -100,8 +100,12 @@ def respaldar_db_en_drive(folder_id):
             ).execute()
         else:
             file_metadata = {"name": DB_FILE, "parents": [folder_id]}
+            # Fix para problemas de cuotas en Service Accounts
             service.files().create(
-                body=file_metadata, media_body=media, supportsAllDrives=True
+                body=file_metadata,
+                media_body=media,
+                supportsAllDrives=True,
+                fields="id",
             ).execute()
     except Exception as e:
         st.error(f"Error al respaldar BBDD en Google Drive: {e}")
@@ -117,6 +121,8 @@ def subir_excel_a_drive(bytes_excel, nombre_archivo, folder_id):
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             resumable=True,
         )
+
+        # Fix de subida directa sin depender de la cuota propia de la Service Account
         file = (
             service.files()
             .create(
@@ -481,9 +487,7 @@ with tab2:
                     mime="application/x-sqlite3",
                 )
 
-        # ----------------------------------------------------
-        # APARTADO TEMPORAL PARA VACIAR/ELIMINAR BASE DE DATOS
-        # ----------------------------------------------------
+        # APARTADO TEMPORAL PARA VACIAR BASE DE DATOS
         with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
             st.warning(
                 "Esta acción borrará TODOS los registros de la base de datos"
@@ -542,9 +546,7 @@ with tab2:
         st.markdown("---")
         st.dataframe(df_alumnos, use_container_width=True)
 
-        # ----------------------------------------------------
-        # EDICIÓN COMPLETA DE CUALQUIER CAMPO DEL ALUMNO
-        # ----------------------------------------------------
+        # EDICIÓN COMPLETA DE CAMPOS
         st.markdown("---")
         st.subheader("✏️ Editar Cualquier Campo de un Alumno Registrado")
         if not df_alumnos.empty:
@@ -586,7 +588,8 @@ with tab2:
                     value=str(row_sel["lugar_nacimiento"] or ""),
                 )
                 e_cel_alum = col_e7.text_input(
-                    "Celular Alumno:", value=str(row_sel["celular_alumno"] or "")
+                    "Celular Alumno:",
+                    value=str(row_sel["celular_alumno"] or ""),
                 )
                 e_correo = col_e8.text_input(
                     "Correo:", value=str(row_sel["correo"] or "")
