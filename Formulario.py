@@ -172,6 +172,15 @@ def inicializar_db():
     conn.close()
 
 
+def vaciar_db():
+    """Elimina todos los registros de la tabla de alumnos."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM alumnos")
+    conn.commit()
+    conn.close()
+
+
 def guardar_en_db(datos):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -472,6 +481,27 @@ with tab2:
                     mime="application/x-sqlite3",
                 )
 
+        # ----------------------------------------------------
+        # APARTADO TEMPORAL PARA VACIAR/ELIMINAR BASE DE DATOS
+        # ----------------------------------------------------
+        with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
+            st.warning(
+                "Esta acción borrará TODOS los registros de la base de datos"
+                " local y actualizará el archivo en Google Drive."
+            )
+            confirmar_vaciar = st.checkbox(
+                "Entiendo que esta acción es irreversible y quiero borrar toda"
+                " la BBDD"
+            )
+            if st.button("🗑️ VACIAR BASE DE DATOS AHORA") and confirmar_vaciar:
+                vaciar_db()
+                respaldar_db_en_drive(FOLDER_ID)
+                st.success(
+                    "✅ Base de datos vaciada con éxito y actualizada en Google"
+                    " Drive."
+                )
+                st.rerun()
+
         st.markdown("---")
         st.subheader("📄 Descargar Solicitud Individual de Alumno")
 
@@ -512,66 +542,169 @@ with tab2:
         st.markdown("---")
         st.dataframe(df_alumnos, use_container_width=True)
 
-        # Sub-sección para editar registros y resincronizar en Drive
+        # ----------------------------------------------------
+        # EDICIÓN COMPLETA DE CUALQUIER CAMPO DEL ALUMNO
+        # ----------------------------------------------------
         st.markdown("---")
-        st.subheader("✏️ Editar Registro Existente")
+        st.subheader("✏️ Editar Cualquier Campo de un Alumno Registrado")
         if not df_alumnos.empty:
             opciones = {
                 f"{r['nombre_alumno']} (CURP: {r['curp']})": r["id"]
                 for _, r in df_alumnos.iterrows()
             }
             sel_alumno = st.selectbox(
-                "Selecciona alumno a corregir:", list(opciones.keys())
+                "Selecciona alumno a modificar:", list(opciones.keys())
             )
             id_sel = opciones[sel_alumno]
             row_sel = df_alumnos[df_alumnos["id"] == id_sel].iloc[0]
 
-            with st.form("form_edit_admin"):
-                edit_nom = st.text_input(
+            with st.form("form_edit_admin_completo"):
+                st.markdown("##### Datos del Alumno")
+                col_e1, col_e2 = st.columns(2)
+                e_nombre = col_e1.text_input(
                     "Nombre:", value=row_sel["nombre_alumno"]
                 )
-                edit_curp = st.text_input("CURP:", value=row_sel["curp"])
-                edit_carrera = st.text_input(
-                    "Carrera:", value=row_sel["carrera"]
+                e_curp = col_e2.text_input("CURP:", value=row_sel["curp"])
+
+                col_e3, col_e4, col_e5 = st.columns(3)
+                e_fnac = col_e3.text_input(
+                    "Fecha Nac. (DD/MM/AAAA):",
+                    value=str(row_sel["fecha_nacimiento"] or ""),
                 )
-                edit_obs = st.text_input(
-                    "Observaciones:", value=row_sel["observaciones"]
+                e_edad = col_e4.text_input(
+                    "Edad:", value=str(row_sel["edad"] or "")
+                )
+                e_sexo = col_e5.selectbox(
+                    "Sexo:",
+                    ["FEMENINO", "MASCULINO"],
+                    index=0 if row_sel["sexo"] == "FEMENINO" else 1,
                 )
 
-                btn_actualizar = st.form_submit_button(
-                    "🔄 Actualizar y Sincronizar"
+                col_e6, col_e7, col_e8 = st.columns(3)
+                e_lugar_nac = col_e6.text_input(
+                    "Lugar Nacimiento:",
+                    value=str(row_sel["lugar_nacimiento"] or ""),
+                )
+                e_cel_alum = col_e7.text_input(
+                    "Celular Alumno:", value=str(row_sel["celular_alumno"] or "")
+                )
+                e_correo = col_e8.text_input(
+                    "Correo:", value=str(row_sel["correo"] or "")
                 )
 
-            if btn_actualizar:
-                f_nac = row_sel["fecha_nacimiento"]
-                datos_upd = (
-                    edit_nom,
-                    edit_curp,
-                    f_nac,
-                    row_sel["edad"],
-                    row_sel["sexo"],
-                    row_sel["lugar_nacimiento"],
-                    row_sel["celular_alumno"],
-                    row_sel["correo"],
-                    row_sel["red_social"],
-                    row_sel["secundaria"],
-                    row_sel["cct"],
-                    row_sel["promedio"],
-                    edit_carrera,
-                    row_sel["turno"],
-                    row_sel["estatus"],
-                    edit_obs,
-                    row_sel["nombre_tutor"],
-                    row_sel["domicilio"],
-                    row_sel["celular_tutor"],
-                    row_sel["tel_casa"],
-                    row_sel["tel_emergencia"],
-                    row_sel["ocupacion"],
-                    row_sel["docs_entregados"],
+                e_red_social = st.text_input(
+                    "Red Social:", value=str(row_sel["red_social"] or "")
                 )
-                actualizar_en_db(id_sel, datos_upd)
+
+                st.markdown("##### Datos Académicos")
+                col_ea1, col_ea2, col_ea3 = st.columns(3)
+                e_secundaria = col_ea1.text_input(
+                    "Secundaria:", value=str(row_sel["secundaria"] or "")
+                )
+                e_cct = col_ea2.text_input(
+                    "CCT:", value=str(row_sel["cct"] or "")
+                )
+                e_promedio = col_ea3.text_input(
+                    "Promedio:", value=str(row_sel["promedio"] or "")
+                )
+
+                col_ea4, col_ea5, col_ea6 = st.columns(3)
+                e_carrera = col_ea4.text_input(
+                    "Carrera:", value=str(row_sel["carrera"] or "")
+                )
+
+                opt_turno = ["MATUTINO", "VESPERTINO"]
+                idx_turno = (
+                    opt_turno.index(row_sel["turno"])
+                    if row_sel["turno"] in opt_turno
+                    else 0
+                )
+                e_turno = col_ea5.selectbox(
+                    "Turno:", opt_turno, index=idx_turno
+                )
+
+                opt_estatus = [
+                    "ASIGNADO",
+                    "CAMBIO",
+                    "OTRO RESULTADO",
+                    "SIN PROCESO",
+                ]
+                idx_estatus = (
+                    opt_estatus.index(row_sel["estatus"])
+                    if row_sel["estatus"] in opt_estatus
+                    else 0
+                )
+                e_estatus = col_ea6.selectbox(
+                    "Estatus:", opt_estatus, index=idx_estatus
+                )
+
+                e_obs = st.text_input(
+                    "Observaciones:", value=str(row_sel["observaciones"] or "")
+                )
+
+                st.markdown("##### Datos del Tutor")
+                col_et1, col_et2 = st.columns(2)
+                e_tutor = col_et1.text_input(
+                    "Nombre Tutor:", value=str(row_sel["nombre_tutor"] or "")
+                )
+                e_domicilio = col_et2.text_input(
+                    "Domicilio:", value=str(row_sel["domicilio"] or "")
+                )
+
+                col_et3, col_et4, col_et5, col_et6 = st.columns(4)
+                e_cel_tut = col_et3.text_input(
+                    "Celular Tutor:", value=str(row_sel["celular_tutor"] or "")
+                )
+                e_tel_casa = col_et4.text_input(
+                    "Tel. Casa:", value=str(row_sel["tel_casa"] or "")
+                )
+                e_tel_emerg = col_et5.text_input(
+                    "Tel. Emergencia:",
+                    value=str(row_sel["tel_emergencia"] or ""),
+                )
+                e_ocupacion = col_et6.text_input(
+                    "Ocupación:", value=str(row_sel["ocupacion"] or "")
+                )
+
+                e_docs = st.text_input(
+                    "Documentos Entregados (números separados por coma):",
+                    value=str(row_sel["docs_entregados"] or ""),
+                )
+
+                btn_actualizar_todo = st.form_submit_button(
+                    "🔄 Guardar Cambios y Sincronizar en Drive"
+                )
+
+            if btn_actualizar_todo:
+                datos_actualizados = (
+                    e_nombre,
+                    e_curp,
+                    e_fnac,
+                    e_edad,
+                    e_sexo,
+                    e_lugar_nac,
+                    e_cel_alum,
+                    e_correo,
+                    e_red_social,
+                    e_secundaria,
+                    e_cct,
+                    e_promedio,
+                    e_carrera,
+                    e_turno,
+                    e_estatus,
+                    e_obs,
+                    e_tutor,
+                    e_domicilio,
+                    e_cel_tut,
+                    e_tel_casa,
+                    e_tel_emerg,
+                    e_ocupacion,
+                    e_docs,
+                )
+                actualizar_en_db(id_sel, datos_actualizados)
                 respaldar_db_en_drive(FOLDER_ID)
                 st.success(
-                    "✅ Registro actualizado y BBDD respaldada en Google Drive."
+                    "✅ Registro actualizado completamente y respaldado en"
+                    " Google Drive."
                 )
                 st.rerun()
