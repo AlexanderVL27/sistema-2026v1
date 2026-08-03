@@ -14,9 +14,7 @@ from googleapiclient.http import (
 
 # Configuración inicial de la página
 st.set_page_config(
-    page_title="Sistema de Inscripción 2026", 
-    page_icon="📝", 
-    layout="wide"
+    page_title="Sistema de Inscripción 2026", page_icon="📝", layout="wide"
 )
 
 PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "admin123")
@@ -29,17 +27,38 @@ FOLDER_ID = st.secrets.get("FOLDER_ID", "1iEMpqolj8KNA4yyqD_qP-VmETT33OTcP")
 # CONEXIÓN Y FUNCIONES DE GOOGLE DRIVE
 # ==========================================
 def obtener_servicio_drive():
-    """Conecta con la API de Google Drive lazily."""
-    if "gcp_service_account" in st.secrets:
-        info_credenciales = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(
-            info_credenciales, scopes=SCOPES
-        )
-    else:
-        creds = Credentials.from_service_account_file(
-            "credentials.json", scopes=SCOPES
-        )
-    return build("drive", "v3", credentials=creds)
+    """Conecta con la API de Google Drive procesando la clave PEM de forma segura."""
+    try:
+        if "gcp_service_account" in st.secrets:
+            # Convertimos el dict de Streamlit a un dict nativo de Python
+            creds_dict = dict(st.secrets["gcp_service_account"])
+
+            # Limpiamos posibles espacios en blanco y manejamos saltos de línea en la private_key
+            if "private_key" in creds_dict:
+                pk = creds_dict["private_key"].strip()
+                if "\\n" in pk:
+                    pk = pk.replace("\\n", "\n")
+                creds_dict["private_key"] = pk
+
+            creds = Credentials.from_service_account_info(
+                creds_dict, scopes=SCOPES
+            )
+
+        elif os.path.exists("credentials.json"):
+            creds = Credentials.from_service_account_file(
+                "credentials.json", scopes=SCOPES
+            )
+        else:
+            st.error(
+                "❌ No se encontraron credenciales válidas en st.secrets ni el archivo credentials.json."
+            )
+            st.stop()
+
+        return build("drive", "v3", credentials=creds)
+
+    except Exception as e:
+        st.error(f"⚠️ Error de autenticación en Google Drive: {e}")
+        st.stop()
 
 
 def descargar_db_desde_drive(folder_id):
