@@ -12,6 +12,7 @@ st.set_page_config(
 
 PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "admin123")
 DB_FILE = "inscripciones.db"
+PLANTILLA_EXCEL = "SOLIC INSCRIP NVO 2026.xlsx"
 
 
 # ==========================================
@@ -90,6 +91,120 @@ def obtener_alumnos():
     return pd.read_sql_query(
         "SELECT * FROM alumnos ORDER BY fecha_registro DESC", conn
     )
+
+
+# ==========================================
+# FUNCIÓN PARA GENERAR EXCEL RELLENADO
+# ==========================================
+def generar_excel_alumno(
+    nombre_alumno,
+    dia_nac,
+    mes_nac,
+    anio_nac,
+    edad,
+    lugar_nac,
+    sexo,
+    celular_alumno,
+    correo,
+    red_social,
+    curp,
+    secundaria,
+    cct,
+    promedio,
+    carrera,
+    turno,
+    estatus,
+    observaciones,
+    nombre_tutor,
+    domicilio,
+    celular_tutor,
+    tel_casa,
+    tel_emergencia,
+    ocupacion,
+    docs_list,
+):
+    """Rellena la plantilla Excel con los datos del alumno y retorna BytesIO."""
+    if not os.path.exists(PLANTILLA_EXCEL):
+        return None
+
+    wb = openpyxl.load_workbook(PLANTILLA_EXCEL)
+    sheet = wb.active
+
+    sheet["G2"] = nombre_alumno
+    sheet["I5"], sheet["M5"], sheet["Q5"], sheet["U5"] = (
+        dia_nac,
+        mes_nac,
+        anio_nac,
+        edad,
+    )
+    sheet["I8"] = lugar_nac
+    if sexo == "FEMENINO":
+        sheet["R8"] = "X"
+    elif sexo == "MASCULINO":
+        sheet["R9"] = "X"
+
+    sheet["I10"], sheet["I11"], sheet["J12"] = (
+        celular_alumno,
+        correo,
+        red_social,
+    )
+    sheet["E14"], sheet["I15"], sheet["H16"], sheet["T16"], sheet["H17"] = (
+        curp,
+        secundaria,
+        cct,
+        promedio,
+        carrera,
+    )
+
+    if turno == "MATUTINO":
+        sheet["H18"] = "X"
+    elif turno == "VESPERTINO":
+        sheet["M18"] = "X"
+
+    map_estatus = {
+        "ASIGNADO": "D19",
+        "CAMBIO": "H19",
+        "OTRO RESULTADO": "N19",
+        "SIN PROCESO": "V19",
+    }
+    if estatus in map_estatus:
+        sheet[map_estatus[estatus]] = "X"
+
+    sheet["Q18"] = observaciones
+    sheet["G22"], sheet["H24"], sheet["I27"], sheet["I28"], sheet["I29"], (
+        sheet["I30"]
+    ) = (
+        nombre_tutor,
+        domicilio,
+        celular_tutor,
+        tel_casa,
+        tel_emergencia,
+        ocupacion,
+    )
+
+    # Mapeo de casillas de documentos entregados (del 1 al 11)
+    cell_docs_map = {
+        "1": "J32",
+        "2": "J33",
+        "3": "J34",
+        "4": "J35",
+        "5": "J36",
+        "6": "J37",
+        "7": "J38",
+        "8": "V32",
+        "9": "V34",
+        "10": "V36",
+        "11": "V37",
+    }
+    for doc_num in docs_list:
+        doc_num_str = str(doc_num).strip()
+        if doc_num_str in cell_docs_map:
+            sheet[cell_docs_map[doc_num_str]] = "X"
+
+    excel_buffer = BytesIO()
+    wb.save(excel_buffer)
+    excel_buffer.seek(0)
+    return excel_buffer.getvalue()
 
 
 # Inicializar tabla al arrancar
@@ -174,95 +289,25 @@ with tab1:
             st.error("⚠️ Debes llenar al menos Nombre del Alumno y CURP.")
         else:
             try:
-                # Modificar plantilla Excel si existe localmente
-                if os.path.exists("SOLIC INSCRIP NVO 2026.xlsx"):
-                    wb = openpyxl.load_workbook("SOLIC INSCRIP NVO 2026.xlsx")
-                    sheet = wb.active
+                # Recopilar documentos marcados
+                docs_checks = [
+                    doc1,
+                    doc2,
+                    doc3,
+                    doc4,
+                    doc5,
+                    doc6,
+                    doc7,
+                    doc8,
+                    doc9,
+                    doc10,
+                    doc11,
+                ]
+                lista_docs = [
+                    str(i) for i, chk in enumerate(docs_checks, 1) if chk
+                ]
 
-                    sheet["G2"] = nombre_alumno
-                    sheet["I5"], sheet["M5"], sheet["Q5"], sheet["U5"] = (
-                        dia_nac,
-                        mes_nac,
-                        anio_nac,
-                        edad,
-                    )
-                    sheet["I8"] = lugar_nac
-                    if sexo == "FEMENINO":
-                        sheet["R8"] = "X"
-                    elif sexo == "MASCULINO":
-                        sheet["R9"] = "X"
-
-                    sheet["I10"], sheet["I11"], sheet["J12"] = (
-                        celular_alumno,
-                        correo,
-                        red_social,
-                    )
-                    sheet["E14"], sheet["I15"], sheet["H16"], sheet["T16"], (
-                        sheet["H17"]
-                    ) = (
-                        curp,
-                        secundaria,
-                        cct,
-                        promedio,
-                        carrera,
-                    )
-
-                    if turno == "MATUTINO":
-                        sheet["H18"] = "X"
-                    elif turno == "VESPERTINO":
-                        sheet["M18"] = "X"
-
-                    map_estatus = {
-                        "ASIGNADO": "D19",
-                        "CAMBIO": "H19",
-                        "OTRO RESULTADO": "N19",
-                        "SIN PROCESO": "V19",
-                    }
-                    if estatus in map_estatus:
-                        sheet[map_estatus[estatus]] = "X"
-
-                    sheet["Q18"] = observaciones
-                    sheet["G22"], sheet["H24"], sheet["I27"], (
-                        sheet["I28"]
-                    ), sheet["I29"], sheet["I30"] = (
-                        nombre_tutor,
-                        domicilio,
-                        celular_tutor,
-                        tel_casa,
-                        tel_emergencia,
-                        ocupacion,
-                    )
-
-                    docs_map = {
-                        doc1: "J32",
-                        doc2: "J33",
-                        doc3: "J34",
-                        doc4: "J35",
-                        doc5: "J36",
-                        doc6: "J37",
-                        doc7: "J38",
-                        doc8: "V32",
-                        doc9: "V34",
-                        doc10: "V36",
-                        doc11: "V37",
-                    }
-                    lista_docs = []
-                    for idx, (check, cell) in enumerate(docs_map.items(), 1):
-                        if check:
-                            sheet[cell] = "X"
-                            lista_docs.append(str(idx))
-
-                    # Guardar archivo Excel en una carpeta local opcional o memoria
-                    nombre_limpio = "".join(
-                        c for c in nombre_alumno if c.isalnum() or c == " "
-                    ).strip()
-                    nombre_excel = f"SOLICITUD_{nombre_limpio}_{curp}.xlsx"
-                    os.makedirs("solicitudes_excel", exist_ok=True)
-                    wb.save(os.path.join("solicitudes_excel", nombre_excel))
-                else:
-                    lista_docs = []
-
-                # Guardar registro en la Base de Datos SQLite local
+                # 1. Guardar en la Base de Datos SQLite local
                 datos_alumno = (
                     nombre_alumno,
                     curp,
@@ -290,7 +335,53 @@ with tab1:
                 )
                 guardar_en_db(datos_alumno)
 
-                st.success("✅ ¡Inscripción guardada correctamente en la BBDD local!")
+                st.success(
+                    "✅ ¡Inscripción guardada correctamente en la BBDD local!"
+                )
+
+                # 2. Generar Excel individual para descarga inmediata
+                bytes_excel = generar_excel_alumno(
+                    nombre_alumno,
+                    dia_nac,
+                    mes_nac,
+                    anio_nac,
+                    edad,
+                    lugar_nac,
+                    sexo,
+                    celular_alumno,
+                    correo,
+                    red_social,
+                    curp,
+                    secundaria,
+                    cct,
+                    promedio,
+                    carrera,
+                    turno,
+                    estatus,
+                    observaciones,
+                    nombre_tutor,
+                    domicilio,
+                    celular_tutor,
+                    tel_casa,
+                    tel_emergencia,
+                    ocupacion,
+                    lista_docs,
+                )
+
+                if bytes_excel:
+                    nombre_limpio = "".join(
+                        c for c in nombre_alumno if c.isalnum() or c == " "
+                    ).strip()
+                    st.download_button(
+                        label="📄 Descargar Solicitud en Excel (.xlsx)",
+                        data=bytes_excel,
+                        file_name=f"SOLICITUD_{nombre_limpio}_{curp}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                else:
+                    st.warning(
+                        f"⚠️ No se encontró la plantilla `{PLANTILLA_EXCEL}` en el servidor para generar el archivo."
+                    )
 
             except sqlite3.IntegrityError:
                 st.error(f"⚠️ La CURP **{curp}** ya se encuentra registrada.")
@@ -303,17 +394,25 @@ with tab2:
     pass_input = st.text_input("Contraseña:", type="password")
 
     if pass_input == PASSWORD_ADMIN:
-        
-        # --- NUBES DE ARCHIVO / SUBIR BBDD MANUAL ---
-        with st.expander("📤 Cargar / Reemplazar Base de Datos (.db)", expanded=False):
-            st.info("Sube una copia previa de tu archivo `inscripciones.db` para consultar o actualizar los datos.")
-            uploaded_db = st.file_uploader("Selecciona un archivo .db local:", type=["db"])
+
+        # --- SUBIR BBDD MANUAL ---
+        with st.expander(
+            "📤 Cargar / Reemplazar Base de Datos (.db)", expanded=False
+        ):
+            st.info(
+                "Sube una copia previa de tu archivo `inscripciones.db` para consultar o actualizar los datos."
+            )
+            uploaded_db = st.file_uploader(
+                "Selecciona un archivo .db local:", type=["db"]
+            )
             if uploaded_db is not None:
                 if st.button("🔄 Cargar esta Base de Datos ahora"):
                     with open(DB_FILE, "wb") as f:
                         f.write(uploaded_db.getbuffer())
                     st.cache_resource.clear()
-                    st.success("✅ Base de datos cargada y actualizada con éxito.")
+                    st.success(
+                        "✅ Base de datos cargada y actualizada con éxito."
+                    )
                     st.rerun()
 
         st.markdown("---")
@@ -322,7 +421,7 @@ with tab2:
 
         col_d1, col_d2 = st.columns(2)
 
-        # Botón 1: Descargar Padrón Consolidado en Excel
+        # Exportar Padrón Consolidado
         output_excel = BytesIO()
         with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
             df_alumnos.to_excel(
@@ -336,7 +435,7 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        # Botón 2: Descargar la BBDD SQLite local (.db)
+        # Descargar copia de la BBDD SQLite local (.db)
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f_db:
                 col_d2.download_button(
@@ -346,10 +445,89 @@ with tab2:
                     mime="application/x-sqlite3",
                 )
 
+        # --- DESCARGAR EXCEL INDIVIDUAL DESDE EL ADMIN ---
+        st.markdown("---")
+        st.subheader("📄 Descargar Solicitud Individual en Excel")
+        if not df_alumnos.empty:
+            col_sel1, col_sel2 = st.columns([3, 1])
+
+            opciones_alumnos_excel = {
+                f"{r['nombre_alumno']} - CURP: {r['curp']}": r
+                for _, r in df_alumnos.iterrows()
+            }
+
+            alumno_escogido = col_sel1.selectbox(
+                "Selecciona un alumno para generar su Excel rellenado:",
+                list(opciones_alumnos_excel.keys()),
+            )
+
+            r_al = opciones_alumnos_excel[alumno_escogido]
+
+            # Parsear fecha de nacimiento guardada "DD/MM/AAAA"
+            fnac_parts = (
+                str(r_al["fecha_nacimiento"]).split("/")
+                if r_al["fecha_nacimiento"]
+                else ["", "", ""]
+            )
+            d_nac = fnac_parts[0] if len(fnac_parts) > 0 else ""
+            m_nac = fnac_parts[1] if len(fnac_parts) > 1 else ""
+            a_nac = fnac_parts[2] if len(fnac_parts) > 2 else ""
+
+            docs_entregados_list = (
+                str(r_al["docs_entregados"]).split(",")
+                if r_al["docs_entregados"]
+                else []
+            )
+
+            bytes_excel_admin = generar_excel_alumno(
+                r_al["nombre_alumno"],
+                d_nac,
+                m_nac,
+                a_nac,
+                r_al["edad"],
+                r_al["lugar_nacimiento"],
+                r_al["sexo"],
+                r_al["celular_alumno"],
+                r_al["correo"],
+                r_al["red_social"],
+                r_al["curp"],
+                r_al["secundaria"],
+                r_al["cct"],
+                r_al["promedio"],
+                r_al["carrera"],
+                r_al["turno"],
+                r_al["estatus"],
+                r_al["observaciones"],
+                r_al["nombre_tutor"],
+                r_al["domicilio"],
+                r_al["celular_tutor"],
+                r_al["tel_casa"],
+                r_al["tel_emergencia"],
+                r_al["ocupacion"],
+                docs_entregados_list,
+            )
+
+            if bytes_excel_admin:
+                nom_clean = "".join(
+                    c for c in r_al["nombre_alumno"] if c.isalnum() or c == " "
+                ).strip()
+                col_sel2.download_button(
+                    label="📄 Descargar Excel Solicitud",
+                    data=bytes_excel_admin,
+                    file_name=f"SOLICITUD_{nom_clean}_{r_al['curp']}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            else:
+                col_sel2.warning("No se encontró la plantilla de Excel.")
+
         # Vaciar base de datos
         with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
-            st.warning("Esta acción borrará TODOS los registros de la base de datos local.")
-            confirmar_vaciar = st.checkbox("Entiendo que esta acción es irreversible")
+            st.warning(
+                "Esta acción borrará TODOS los registros de la base de datos local."
+            )
+            confirmar_vaciar = st.checkbox(
+                "Entiendo que esta acción es irreversible"
+            )
             if st.button("🗑️ VACIAR BASE DE DATOS AHORA") and confirmar_vaciar:
                 vaciar_db()
                 st.success("✅ Base de datos vaciada con éxito.")
