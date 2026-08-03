@@ -27,15 +27,15 @@ FOLDER_ID = st.secrets.get("FOLDER_ID", "1iEMpqolj8KNA4yyqD_qP-VmETT33OTcP")
 # CONEXIÓN Y FUNCIONES DE GOOGLE DRIVE
 # ==========================================
 def obtener_servicio_drive():
-    """Conecta con la API de Google Drive procesando la clave PEM de forma segura."""
+    """Conecta con la API de Google Drive procesando y sanitizando la clave PEM."""
     try:
         if "gcp_service_account" in st.secrets:
-            # Convertimos el dict de Streamlit a un dict nativo de Python
             creds_dict = dict(st.secrets["gcp_service_account"])
 
-            # Limpiamos posibles espacios en blanco y manejamos saltos de línea en la private_key
             if "private_key" in creds_dict:
-                pk = creds_dict["private_key"].strip()
+                pk = creds_dict["private_key"]
+                # Elimina espacios no rompibles (\xa0) y caracteres invisibles
+                pk = pk.replace("\xa0", "").strip()
                 if "\\n" in pk:
                     pk = pk.replace("\\n", "\n")
                 creds_dict["private_key"] = pk
