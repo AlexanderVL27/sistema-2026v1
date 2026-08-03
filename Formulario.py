@@ -4,13 +4,6 @@ from io import BytesIO
 import openpyxl
 import pandas as pd
 import streamlit as st
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import (
-    MediaFileUpload,
-    MediaIoBaseDownload,
-    MediaIoBaseUpload,
-)
 
 # Configuración inicial de la página
 st.set_page_config(
@@ -19,163 +12,6 @@ st.set_page_config(
 
 PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "admin123")
 DB_FILE = "inscripciones.db"
-SCOPES = ["https://www.googleapis.com/auth/drive"]
-FOLDER_ID = st.secrets.get("FOLDER_ID", "1iEMpqolj8KNA4yyqD_qP-VmETT33OTcP")
-
-
-# ==========================================
-# CONEXIÓN Y FUNCIONES DE GOOGLE DRIVE
-# ==========================================
-def obtener_servicio_drive():
-    """Conecta con la API de Google Drive procesando y sanitizando la clave PEM."""
-    try:
-        if "gcp_service_account" in st.secrets:
-            creds_dict = dict(st.secrets["gcp_service_account"])
-
-            if "private_key" in creds_dict:
-                pk = creds_dict["private_key"]
-                # Elimina espacios no rompibles (\xa0) y caracteres invisibles
-                pk = pk.replace("\xa0", "").strip()
-                if "\\n" in pk:
-                    pk = pk.replace("\\n", "\n")
-                creds_dict["private_key"] = pk
-
-            creds = Credentials.from_service_account_info(
-                creds_dict, scopes=SCOPES
-            )
-
-        elif os.path.exists("credentials.json"):
-            creds = Credentials.from_service_account_file(
-                "credentials.json", scopes=SCOPES
-            )
-        else:
-            st.error(
-                "❌ No se encontraron credenciales válidas en st.secrets ni el archivo credentials.json."
-            )
-            st.stop()
-
-        return build("drive", "v3", credentials=creds)
-
-    except Exception as e:
-        st.error(f"⚠️ Error de autenticación en Google Drive: {e}")
-        st.stop()
-
-
-def descargar_db_desde_drive(folder_id):
-    """Descarga la última versión de la BBDD desde Google Drive si existe."""
-    try:
-        service = obtener_servicio_drive()
-        query = f"'{folder_id}' in parents and name='{DB_FILE}' and trashed=false"
-        results = (
-            service.files()
-            .list(
-                q=query,
-                fields="files(id, name)",
-                pageSize=1,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            )
-            .execute()
-        )
-        files = results.get("files", [])
-
-        if files:
-            file_id = files[0]["id"]
-            request = service.files().get_media(fileId=file_id)
-            with open(DB_FILE, "wb") as f:
-                downloader = MediaIoBaseDownload(f, request)
-                done = False
-                while not done:
-                    _, done = downloader.next_chunk()
-            st.toast(
-                "Última versión de la Base de Datos cargada desde Drive.",
-                icon="✅",
-            )
-    except Exception as e:
-        st.warning(f"No se pudo descargar la BBDD inicial desde Drive: {e}")
-
-
-def respaldar_db_en_drive(folder_id):
-    """Sube o actualiza el archivo inscripciones.db en Google Drive."""
-    try:
-        service = obtener_servicio_drive()
-        query = f"'{folder_id}' in parents and name='{DB_FILE}' and trashed=false"
-        results = (
-            service.files()
-            .list(
-                q=query,
-                fields="files(id, name)",
-                pageSize=1,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            )
-            .execute()
-        )
-        files = results.get("files", [])
-
-        media = MediaFileUpload(
-            DB_FILE, mimetype="application/x-sqlite3", resumable=True
-        )
-
-        if files:
-            file_id = files[0]["id"]
-            service.files().update(
-                fileId=file_id, media_body=media, supportsAllDrives=True
-            ).execute()
-        else:
-            file_metadata = {"name": DB_FILE, "parents": [folder_id]}
-            service.files().create(
-                body=file_metadata,
-                media_body=media,
-                supportsAllDrives=True,
-                fields="id",
-            ).execute()
-    except Exception as e:
-        st.error(f"Error al respaldar BBDD en Google Drive: {e}")
-
-
-def subir_excel_a_drive(bytes_excel, nombre_archivo, folder_id):
-    """Sube la solicitud en Excel individual a la carpeta de Drive."""
-    try:
-        service = obtener_servicio_drive()
-        file_metadata = {"name": nombre_archivo, "parents": [folder_id]}
-        media = MediaIoBaseUpload(
-            bytes_excel,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            resumable=True,
-        )
-
-        file = (
-            service.files()
-            .create(
-                body=file_metadata,
-                media_body=media,
-                fields="id",
-                supportsAllDrives=True,
-            )
-            .execute()
-        )
-        return file.get("id")
-    except Exception as e:
-        st.error(f"Error al subir Excel a Drive: {e}")
-        return None
-
-
-def descargar_excel_individual_drive(file_id):
-    """Descarga los bytes del Excel individual guardado en Google Drive."""
-    try:
-        service = obtener_servicio_drive()
-        request = service.files().get_media(fileId=file_id)
-        file_buffer = BytesIO()
-        downloader = MediaIoBaseDownload(file_buffer, request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-        file_buffer.seek(0)
-        return file_buffer.getvalue()
-    except Exception as e:
-        st.error(f"Error al descargar Excel desde Drive: {e}")
-        return None
 
 
 # ==========================================
@@ -189,6 +25,7 @@ def get_db_connection():
 
 
 def inicializar_db():
+    """Crea la tabla de alumnos si no existe en la BBDD local."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -200,7 +37,7 @@ def inicializar_db():
             red_social TEXT, secundaria TEXT, cct TEXT, promedio TEXT, carrera TEXT,
             turno TEXT, estatus TEXT, observaciones TEXT, nombre_tutor TEXT,
             domicilio TEXT, celular_tutor TEXT, tel_casa TEXT, tel_emergencia TEXT,
-            ocupacion TEXT, docs_entregados TEXT, drive_file_id TEXT
+            ocupacion TEXT, docs_entregados TEXT
         )
     """)
     conn.commit()
@@ -223,8 +60,8 @@ def guardar_en_db(datos):
             nombre_alumno, curp, fecha_nacimiento, edad, sexo, lugar_nacimiento,
             celular_alumno, correo, red_social, secundaria, cct, promedio,
             carrera, turno, estatus, observaciones, nombre_tutor, domicilio,
-            celular_tutor, tel_casa, tel_emergencia, ocupacion, docs_entregados, drive_file_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            celular_tutor, tel_casa, tel_emergencia, ocupacion, docs_entregados
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         datos,
     )
@@ -255,11 +92,7 @@ def obtener_alumnos():
     )
 
 
-# --- INICIALIZACIÓN Y SINCRONIZACIÓN AUTOMÁTICA ---
-if "db_sincronizada" not in st.session_state:
-    descargar_db_desde_drive(FOLDER_ID)
-    st.session_state["db_sincronizada"] = True
-
+# Inicializar tabla al arrancar
 inicializar_db()
 
 # ==========================================
@@ -334,104 +167,102 @@ with tab1:
         doc10 = col_d2.checkbox("10.- CURP Tutor")
         doc11 = col_d2.checkbox("11.- 3 Fotografías Infantil")
 
-        enviado = st.form_submit_button("💾 GUARDAR SOLICITUD")
+        enviado = st.form_submit_button("💾 GUARDAR SOLICITUD LOCALMENTE")
 
     if enviado:
         if not nombre_alumno or not curp:
             st.error("⚠️ Debes llenar al menos Nombre del Alumno y CURP.")
         else:
             try:
-                wb = openpyxl.load_workbook("SOLIC INSCRIP NVO 2026.xlsx")
-                sheet = wb.active
+                # Modificar plantilla Excel si existe localmente
+                if os.path.exists("SOLIC INSCRIP NVO 2026.xlsx"):
+                    wb = openpyxl.load_workbook("SOLIC INSCRIP NVO 2026.xlsx")
+                    sheet = wb.active
 
-                sheet["G2"] = nombre_alumno
-                sheet["I5"], sheet["M5"], sheet["Q5"], sheet["U5"] = (
-                    dia_nac,
-                    mes_nac,
-                    anio_nac,
-                    edad,
-                )
-                sheet["I8"] = lugar_nac
-                if sexo == "FEMENINO":
-                    sheet["R8"] = "X"
-                elif sexo == "MASCULINO":
-                    sheet["R9"] = "X"
+                    sheet["G2"] = nombre_alumno
+                    sheet["I5"], sheet["M5"], sheet["Q5"], sheet["U5"] = (
+                        dia_nac,
+                        mes_nac,
+                        anio_nac,
+                        edad,
+                    )
+                    sheet["I8"] = lugar_nac
+                    if sexo == "FEMENINO":
+                        sheet["R8"] = "X"
+                    elif sexo == "MASCULINO":
+                        sheet["R9"] = "X"
 
-                sheet["I10"], sheet["I11"], sheet["J12"] = (
-                    celular_alumno,
-                    correo,
-                    red_social,
-                )
-                sheet["E14"], sheet["I15"], sheet["H16"], sheet["T16"], (
-                    sheet["H17"]
-                ) = (
-                    curp,
-                    secundaria,
-                    cct,
-                    promedio,
-                    carrera,
-                )
+                    sheet["I10"], sheet["I11"], sheet["J12"] = (
+                        celular_alumno,
+                        correo,
+                        red_social,
+                    )
+                    sheet["E14"], sheet["I15"], sheet["H16"], sheet["T16"], (
+                        sheet["H17"]
+                    ) = (
+                        curp,
+                        secundaria,
+                        cct,
+                        promedio,
+                        carrera,
+                    )
 
-                if turno == "MATUTINO":
-                    sheet["H18"] = "X"
-                elif turno == "VESPERTINO":
-                    sheet["M18"] = "X"
+                    if turno == "MATUTINO":
+                        sheet["H18"] = "X"
+                    elif turno == "VESPERTINO":
+                        sheet["M18"] = "X"
 
-                map_estatus = {
-                    "ASIGNADO": "D19",
-                    "CAMBIO": "H19",
-                    "OTRO RESULTADO": "N19",
-                    "SIN PROCESO": "V19",
-                }
-                if estatus in map_estatus:
-                    sheet[map_estatus[estatus]] = "X"
+                    map_estatus = {
+                        "ASIGNADO": "D19",
+                        "CAMBIO": "H19",
+                        "OTRO RESULTADO": "N19",
+                        "SIN PROCESO": "V19",
+                    }
+                    if estatus in map_estatus:
+                        sheet[map_estatus[estatus]] = "X"
 
-                sheet["Q18"] = observaciones
-                sheet["G22"], sheet["H24"], sheet["I27"], sheet["I28"], (
-                    sheet["I29"]
-                ), sheet["I30"] = (
-                    nombre_tutor,
-                    domicilio,
-                    celular_tutor,
-                    tel_casa,
-                    tel_emergencia,
-                    ocupacion,
-                )
+                    sheet["Q18"] = observaciones
+                    sheet["G22"], sheet["H24"], sheet["I27"], (
+                        sheet["I28"]
+                    ), sheet["I29"], sheet["I30"] = (
+                        nombre_tutor,
+                        domicilio,
+                        celular_tutor,
+                        tel_casa,
+                        tel_emergencia,
+                        ocupacion,
+                    )
 
-                docs_map = {
-                    doc1: "J32",
-                    doc2: "J33",
-                    doc3: "J34",
-                    doc4: "J35",
-                    doc5: "J36",
-                    doc6: "J37",
-                    doc7: "J38",
-                    doc8: "V32",
-                    doc9: "V34",
-                    doc10: "V36",
-                    doc11: "V37",
-                }
-                lista_docs = []
-                for idx, (check, cell) in enumerate(docs_map.items(), 1):
-                    if check:
-                        sheet[cell] = "X"
-                        lista_docs.append(str(idx))
+                    docs_map = {
+                        doc1: "J32",
+                        doc2: "J33",
+                        doc3: "J34",
+                        doc4: "J35",
+                        doc5: "J36",
+                        doc6: "J37",
+                        doc7: "J38",
+                        doc8: "V32",
+                        doc9: "V34",
+                        doc10: "V36",
+                        doc11: "V37",
+                    }
+                    lista_docs = []
+                    for idx, (check, cell) in enumerate(docs_map.items(), 1):
+                        if check:
+                            sheet[cell] = "X"
+                            lista_docs.append(str(idx))
 
-                excel_buffer = BytesIO()
-                wb.save(excel_buffer)
-                excel_buffer.seek(0)
+                    # Guardar archivo Excel en una carpeta local opcional o memoria
+                    nombre_limpio = "".join(
+                        c for c in nombre_alumno if c.isalnum() or c == " "
+                    ).strip()
+                    nombre_excel = f"SOLICITUD_{nombre_limpio}_{curp}.xlsx"
+                    os.makedirs("solicitudes_excel", exist_ok=True)
+                    wb.save(os.path.join("solicitudes_excel", nombre_excel))
+                else:
+                    lista_docs = []
 
-                nombre_limpio = "".join(
-                    c for c in nombre_alumno if c.isalnum() or c == " "
-                ).strip()
-                nombre_archivo = f"SOLICITUD_{nombre_limpio}_{curp}.xlsx"
-
-                # 1. Subir Excel individual a Drive
-                drive_id = subir_excel_a_drive(
-                    excel_buffer, nombre_archivo, FOLDER_ID
-                )
-
-                # 2. Guardar en SQLite local
+                # Guardar registro en la Base de Datos SQLite local
                 datos_alumno = (
                     nombre_alumno,
                     curp,
@@ -456,21 +287,15 @@ with tab1:
                     tel_emergencia,
                     ocupacion,
                     ",".join(lista_docs),
-                    drive_id,
                 )
                 guardar_en_db(datos_alumno)
 
-                # 3. Respaldar/Actualizar la BBDD SQLite en Drive
-                respaldar_db_en_drive(FOLDER_ID)
-
-                st.success(
-                    "✅ ¡Inscripción guardada y respaldada en Google Drive correctamente!"
-                )
+                st.success("✅ ¡Inscripción guardada correctamente en la BBDD local!")
 
             except sqlite3.IntegrityError:
                 st.error(f"⚠️ La CURP **{curp}** ya se encuentra registrada.")
             except Exception as e:
-                st.error(f"Error procesando la solicitud: {e}")
+                st.error(f"Error al guardar la solicitud: {e}")
 
 # --- TAB 2: PANEL ADMINISTRADOR ---
 with tab2:
@@ -478,6 +303,20 @@ with tab2:
     pass_input = st.text_input("Contraseña:", type="password")
 
     if pass_input == PASSWORD_ADMIN:
+        
+        # --- NUBES DE ARCHIVO / SUBIR BBDD MANUAL ---
+        with st.expander("📤 Cargar / Reemplazar Base de Datos (.db)", expanded=False):
+            st.info("Sube una copia previa de tu archivo `inscripciones.db` para consultar o actualizar los datos.")
+            uploaded_db = st.file_uploader("Selecciona un archivo .db local:", type=["db"])
+            if uploaded_db is not None:
+                if st.button("🔄 Cargar esta Base de Datos ahora"):
+                    with open(DB_FILE, "wb") as f:
+                        f.write(uploaded_db.getbuffer())
+                    st.cache_resource.clear()
+                    st.success("✅ Base de datos cargada y actualizada con éxito.")
+                    st.rerun()
+
+        st.markdown("---")
         df_alumnos = obtener_alumnos()
         st.write(f"**Total de alumnos registrados:** {len(df_alumnos)}")
 
@@ -497,68 +336,24 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        # Botón 2: Descargar la BBDD SQLite (.db)
+        # Botón 2: Descargar la BBDD SQLite local (.db)
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f_db:
                 col_d2.download_button(
-                    label="🗄️ Descargar Archivo BBDD (.db)",
+                    label="🗄️ Descargar Copia BBDD (.db)",
                     data=f_db.read(),
                     file_name="inscripciones.db",
                     mime="application/x-sqlite3",
                 )
 
-        # APARTADO TEMPORAL PARA VACIAR BASE DE DATOS
+        # Vaciar base de datos
         with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
-            st.warning(
-                "Esta acción borrará TODOS los registros de la base de datos local y actualizará el archivo en Google Drive."
-            )
-            confirmar_vaciar = st.checkbox(
-                "Entiendo que esta acción es irreversible y quiero borrar toda la BBDD"
-            )
+            st.warning("Esta acción borrará TODOS los registros de la base de datos local.")
+            confirmar_vaciar = st.checkbox("Entiendo que esta acción es irreversible")
             if st.button("🗑️ VACIAR BASE DE DATOS AHORA") and confirmar_vaciar:
                 vaciar_db()
-                respaldar_db_en_drive(FOLDER_ID)
-                st.success(
-                    "✅ Base de datos vaciada con éxito y actualizada en Google Drive."
-                )
+                st.success("✅ Base de datos vaciada con éxito.")
                 st.rerun()
-
-        st.markdown("---")
-        st.subheader("📄 Descargar Solicitud Individual de Alumno")
-
-        if not df_alumnos.empty:
-            col_sel1, col_sel2 = st.columns([3, 1])
-
-            opciones_alumnos = {
-                f"{r['nombre_alumno']} - CURP: {r['curp']}": (
-                    r["drive_file_id"],
-                    r["nombre_alumno"],
-                    r["curp"],
-                )
-                for _, r in df_alumnos.iterrows()
-            }
-
-            alumno_escogido = col_sel1.selectbox(
-                "Selecciona un alumno para obtener su Excel:",
-                list(opciones_alumnos.keys()),
-            )
-
-            file_id_d, nom_al, curp_al = opciones_alumnos[alumno_escogido]
-
-            if file_id_d:
-                bytes_xls = descargar_excel_individual_drive(file_id_d)
-                if bytes_xls:
-                    nom_arch_clean = "".join(
-                        c for c in nom_al if c.isalnum() or c == " "
-                    ).strip()
-                    col_sel2.download_button(
-                        label="📄 Descargar Excel Solicitud",
-                        data=bytes_xls,
-                        file_name=f"SOLICITUD_{nom_arch_clean}_{curp_al}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-            else:
-                col_sel2.warning("Este registro no tiene un ID de Drive.")
 
         st.markdown("---")
         st.dataframe(df_alumnos, use_container_width=True)
@@ -692,7 +487,7 @@ with tab2:
                 )
 
                 btn_actualizar_todo = st.form_submit_button(
-                    "🔄 Guardar Cambios y Sincronizar en Drive"
+                    "🔄 Guardar Cambios en BBDD Local"
                 )
 
             if btn_actualizar_todo:
@@ -722,8 +517,5 @@ with tab2:
                     e_docs,
                 )
                 actualizar_en_db(id_sel, datos_actualizados)
-                respaldar_db_en_drive(FOLDER_ID)
-                st.success(
-                    "✅ Registro actualizado completamente y respaldado en Google Drive."
-                )
+                st.success("✅ Registro actualizado correctamente.")
                 st.rerun()
