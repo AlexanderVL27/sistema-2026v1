@@ -39,7 +39,8 @@ def inicializar_db():
             sexo TEXT, lugar_nacimiento TEXT, celular_alumno TEXT, correo TEXT,
             red_social TEXT, secundaria TEXT, cct TEXT, promedio TEXT, carrera TEXT,
             turno TEXT, estatus TEXT, observaciones TEXT, nombre_tutor TEXT,
-            domicilio TEXT, celular_tutor TEXT, tel_casa TEXT, tel_emergencia TEXT,
+            domicilio TEXT, dom_diferente INTEGER, segundo_domicilio TEXT,
+            celular_tutor TEXT, tel_casa TEXT, tel_emergencia TEXT,
             ocupacion TEXT, docs_entregados TEXT
         )
     """)
@@ -63,8 +64,9 @@ def guardar_en_db(datos):
             nombre_alumno, curp, fecha_nacimiento, edad, sexo, lugar_nacimiento,
             celular_alumno, correo, red_social, secundaria, cct, promedio,
             carrera, turno, estatus, observaciones, nombre_tutor, domicilio,
-            celular_tutor, tel_casa, tel_emergencia, ocupacion, docs_entregados
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            dom_diferente, segundo_domicilio, celular_tutor, tel_casa, tel_emergencia,
+            ocupacion, docs_entregados
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         datos,
     )
@@ -80,7 +82,8 @@ def actualizar_en_db(id_alumno, datos):
             nombre_alumno=?, curp=?, fecha_nacimiento=?, edad=?, sexo=?, lugar_nacimiento=?,
             celular_alumno=?, correo=?, red_social=?, secundaria=?, cct=?, promedio=?,
             carrera=?, turno=?, estatus=?, observaciones=?, nombre_tutor=?, domicilio=?,
-            celular_tutor=?, tel_casa=?, tel_emergencia=?, ocupacion=?, docs_entregados=?
+            dom_diferente=?, segundo_domicilio=?, celular_tutor=?, tel_casa=?, tel_emergencia=?,
+            ocupacion=?, docs_entregados=?
         WHERE id=?
     """,
         (*datos, id_alumno),
@@ -132,13 +135,15 @@ def generar_excel_alumno(
     observaciones,
     nombre_tutor,
     domicilio,
+    dom_diferente,
+    segundo_domicilio,
     celular_tutor,
     tel_casa,
     tel_emergencia,
     ocupacion,
     docs_list,
 ):
-    """Rellena la plantilla Excel con los datos del alumno y mantiene el diseño exacto para impresión."""
+    """Rellena la plantilla Excel con los datos del alumno y ajusta tipografías requeridas."""
     if not os.path.exists(PLANTILLA_EXCEL):
         return None
 
@@ -151,6 +156,16 @@ def generar_excel_alumno(
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 1
+
+    # AJUSTE SOLICITADO: Linea 25 (D25 a V25) con Arial 10
+    font_arial_10_bold = Font(name="Arial", size=10, bold=True)
+    if sheet["D25"].value:
+        sheet["D25"].font = font_arial_10_bold
+
+    # AJUSTE SOLICITADO: Linea 31 (A31 a V31) con Arial 9
+    font_arial_9_bold = Font(name="Arial", size=9, bold=True)
+    if sheet["A31"].value:
+        sheet["A31"].font = font_arial_9_bold
 
     escribir_celda_segura(sheet, "G2", nombre_alumno)
     escribir_celda_segura(sheet, "I5", dia_nac)
@@ -193,6 +208,23 @@ def generar_excel_alumno(
     escribir_celda_segura(sheet, "Q18", observaciones)
     escribir_celda_segura(sheet, "G22", nombre_tutor)
     escribir_celda_segura(sheet, "H24", domicilio)
+
+    # --- MANEJO DE FILA 26: 2DO DOMICILIO O NOTA POR DEFECTO ---
+    if dom_diferente and segundo_domicilio:
+        texto_f26 = f"2DO DOMICILIO TUTOR: {segundo_domicilio}"
+        font_f26 = Font(name="Arial", size=8, bold=True)
+    else:
+        texto_f26 = (
+            "EL DOMICILIO DEBE SER EL MSMO DEL ALUMNO, EN CASO DE QUE SEA DIFERENTE\n"
+            " ESPECIFIQUE EN ESTE ESPACIO EL 2DO Y PRESENTE AMBOS COMPROBANTES"
+        )
+        font_f26 = Font(name="Arial", size=8, bold=False)
+
+    align_f26 = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    escribir_celda_segura(
+        sheet, "D26", texto_f26, alineacion=align_f26, fuente=font_f26
+    )
+
     escribir_celda_segura(sheet, "I27", celular_tutor)
     escribir_celda_segura(sheet, "I28", tel_casa)
     escribir_celda_segura(sheet, "I29", tel_emergencia)
@@ -217,7 +249,7 @@ def generar_excel_alumno(
         if doc_num_str in cell_docs_map:
             escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
-    # --- FECHA EN FILA 41 (IGUALITA AL FORMATO ORIGINAL) ---
+    # --- FECHA EN FILA 41 (FORMATO EXACTO) ---
     hoy = datetime.date.today()
     meses_es = [
         "ENERO",
@@ -236,7 +268,6 @@ def generar_excel_alumno(
     nombre_mes = meses_es[hoy.month - 1]
     texto_fecha_completa = f"COL. NETZAHUALCOYOTL, TEXCOCO, MEXICO. A {hoy.day:02d} DE {nombre_mes} DEL {hoy.year}"
 
-    # Aplicar con el estilo exacto de la plantilla original (Aptos Narrow, 11pt, Centrado)
     fuente_original = Font(name="Aptos Narrow", size=11, bold=False)
     alineacion_centrada = Alignment(
         horizontal="center", vertical="center", wrap_text=False
@@ -312,7 +343,18 @@ with tab1:
 
         st.header("3. Datos del Tutor")
         nombre_tutor = st.text_input("Nombre completo del Tutor:")
-        domicilio = st.text_input("Domicilio particular:")
+        domicilio = st.text_input(
+            "Domicilio del Tutor (Calle, No., Colonia, Localidad, Municipio):"
+        )
+
+        dom_dif_check = st.checkbox(
+            "¿El domicilio del tutor es DIFERENTE al del alumno?"
+        )
+        segundo_domicilio = ""
+        if dom_dif_check:
+            segundo_domicilio = st.text_input(
+                "Especifique el 2do domicilio del tutor (Presentar ambos comprobantes):"
+            )
 
         col_tut1, col_tut2, col_tut3 = st.columns(3)
         celular_tutor = col_tut1.text_input("Celular del Tutor:")
@@ -342,12 +384,10 @@ with tab1:
             st.error("⚠️ Debes llenar al menos Nombre del Alumno y CURP.")
         else:
             try:
-                # Extraer día, mes y año de la fecha seleccionada
                 dia_nac = f"{fecha_nac.day:02d}"
                 mes_nac = f"{fecha_nac.month:02d}"
                 anio_nac = str(fecha_nac.year)
 
-                # Recopilar documentos marcados
                 docs_checks = [
                     doc1,
                     doc2,
@@ -365,7 +405,7 @@ with tab1:
                     str(i) for i, chk in enumerate(docs_checks, 1) if chk
                 ]
 
-                # 1. Guardar en la Base de Datos SQLite local
+                # 1. Guardar en SQLite local
                 datos_alumno = (
                     nombre_alumno,
                     curp,
@@ -385,6 +425,8 @@ with tab1:
                     observaciones,
                     nombre_tutor,
                     domicilio,
+                    1 if dom_dif_check else 0,
+                    segundo_domicilio,
                     celular_tutor,
                     tel_casa,
                     tel_emergencia,
@@ -397,7 +439,7 @@ with tab1:
                     "✅ ¡Inscripción guardada correctamente en la BBDD local!"
                 )
 
-                # 2. Generar Excel individual para descarga inmediata
+                # 2. Generar Excel rellenado
                 bytes_excel = generar_excel_alumno(
                     nombre_alumno,
                     dia_nac,
@@ -419,6 +461,8 @@ with tab1:
                     observaciones,
                     nombre_tutor,
                     domicilio,
+                    dom_dif_check,
+                    segundo_domicilio,
                     celular_tutor,
                     tel_casa,
                     tel_emergencia,
@@ -453,7 +497,6 @@ with tab2:
 
     if pass_input == PASSWORD_ADMIN:
 
-        # --- SUBIR BBDD MANUAL ---
         with st.expander(
             "📤 Cargar / Reemplazar Base de Datos (.db)", expanded=False
         ):
@@ -479,7 +522,6 @@ with tab2:
 
         col_d1, col_d2 = st.columns(2)
 
-        # Exportar Padrón Consolidado
         output_excel = BytesIO()
         with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
             df_alumnos.to_excel(
@@ -493,7 +535,6 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-        # Descargar copia de la BBDD SQLite local (.db)
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f_db:
                 col_d2.download_button(
@@ -503,7 +544,6 @@ with tab2:
                     mime="application/x-sqlite3",
                 )
 
-        # --- DESCARGAR EXCEL INDIVIDUAL DESDE EL ADMIN ---
         st.markdown("---")
         st.subheader("📄 Descargar Solicitud Individual en Excel")
         if not df_alumnos.empty:
@@ -521,7 +561,6 @@ with tab2:
 
             r_al = opciones_alumnos_excel[alumno_escogido]
 
-            # Parsear fecha de nacimiento guardada "DD/MM/AAAA"
             fnac_parts = (
                 str(r_al["fecha_nacimiento"]).split("/")
                 if r_al["fecha_nacimiento"]
@@ -558,6 +597,8 @@ with tab2:
                 r_al["observaciones"],
                 r_al["nombre_tutor"],
                 r_al["domicilio"],
+                bool(r_al.get("dom_diferente", False)),
+                r_al.get("segundo_domicilio", ""),
                 r_al["celular_tutor"],
                 r_al["tel_casa"],
                 r_al["tel_emergencia"],
@@ -575,10 +616,7 @@ with tab2:
                     file_name=f"SOLICITUD_{nom_clean}_{r_al['curp']}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
-            else:
-                col_sel2.warning("No se encontró la plantilla de Excel.")
 
-        # Vaciar base de datos
         with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
             st.warning(
                 "Esta acción borrará TODOS los registros de la base de datos local."
@@ -594,7 +632,6 @@ with tab2:
         st.markdown("---")
         st.dataframe(df_alumnos, use_container_width=True)
 
-        # EDICIÓN COMPLETA DE CAMPOS
         st.markdown("---")
         st.subheader("✏️ Editar Cualquier Campo de un Alumno Registrado")
         if not df_alumnos.empty:
@@ -699,7 +736,17 @@ with tab2:
                     "Nombre Tutor:", value=str(row_sel["nombre_tutor"] or "")
                 )
                 e_domicilio = col_et2.text_input(
-                    "Domicilio:", value=str(row_sel["domicilio"] or "")
+                    "Domicilio Principal:",
+                    value=str(row_sel["domicilio"] or ""),
+                )
+
+                e_dom_dif = st.checkbox(
+                    "¿Domicilio diferente al del alumno?",
+                    value=bool(row_sel.get("dom_diferente", 0)),
+                )
+                e_seg_dom = st.text_input(
+                    "Segundo Domicilio Tutor:",
+                    value=str(row_sel.get("segundo_domicilio", "") or ""),
                 )
 
                 col_et3, col_et4, col_et5, col_et6 = st.columns(4)
@@ -746,6 +793,8 @@ with tab2:
                     e_obs,
                     e_tutor,
                     e_domicilio,
+                    1 if e_dom_dif else 0,
+                    e_seg_dom,
                     e_cel_tut,
                     e_tel_casa,
                     e_tel_emerg,
