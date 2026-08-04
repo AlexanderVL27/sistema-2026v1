@@ -3,6 +3,7 @@ import os
 import sqlite3
 from io import BytesIO
 import openpyxl
+from openpyxl.styles import Alignment, Font
 import pandas as pd
 import streamlit as st
 
@@ -94,10 +95,15 @@ def obtener_alumnos():
     )
 
 
-def escribir_celda_segura(sheet, celda, valor):
-    """Escribe en una celda ignorando AttributeError por celdas combinadas secundarias."""
+def escribir_celda_segura(sheet, celda, valor, alineacion=None, fuente=None):
+    """Escribe en una celda conservando el formato o aplicando nuevos estilos."""
     try:
-        sheet[celda] = valor
+        cell = sheet[celda]
+        cell.value = valor
+        if alineacion:
+            cell.alignment = alineacion
+        if fuente:
+            cell.font = fuente
     except AttributeError:
         pass
 
@@ -132,12 +138,19 @@ def generar_excel_alumno(
     ocupacion,
     docs_list,
 ):
-    """Rellena la plantilla Excel con los datos del alumno y retorna BytesIO."""
+    """Rellena la plantilla Excel con los datos del alumno y mantiene el diseño exacto para impresión."""
     if not os.path.exists(PLANTILLA_EXCEL):
         return None
 
     wb = openpyxl.load_workbook(PLANTILLA_EXCEL)
     sheet = wb.active
+
+    # --- AJUSTES DE IMPRESIÓN EXACTOS ---
+    sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
+    sheet.page_setup.paperSize = sheet.PAPERSIZE_LETTER
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 1
 
     escribir_celda_segura(sheet, "G2", nombre_alumno)
     escribir_celda_segura(sheet, "I5", dia_nac)
@@ -204,7 +217,7 @@ def generar_excel_alumno(
         if doc_num_str in cell_docs_map:
             escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
-    # --- FECHA AUTOMÁTICA EN LA FILA 41 (A41) ---
+    # --- FECHA EN FILA 41 (IGUALITA AL FORMATO ORIGINAL) ---
     hoy = datetime.date.today()
     meses_es = [
         "ENERO",
@@ -223,7 +236,19 @@ def generar_excel_alumno(
     nombre_mes = meses_es[hoy.month - 1]
     texto_fecha_completa = f"COL. NETZAHUALCOYOTL, TEXCOCO, MEXICO. A {hoy.day:02d} DE {nombre_mes} DEL {hoy.year}"
 
-    escribir_celda_segura(sheet, "A41", texto_fecha_completa)
+    # Aplicar con el estilo exacto de la plantilla original (Aptos Narrow, 11pt, Centrado)
+    fuente_original = Font(name="Aptos Narrow", size=11, bold=False)
+    alineacion_centrada = Alignment(
+        horizontal="center", vertical="center", wrap_text=False
+    )
+
+    escribir_celda_segura(
+        sheet,
+        "A41",
+        texto_fecha_completa,
+        alineacion=alineacion_centrada,
+        fuente=fuente_original,
+    )
 
     excel_buffer = BytesIO()
     wb.save(excel_buffer)
