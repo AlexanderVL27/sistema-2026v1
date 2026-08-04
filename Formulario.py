@@ -143,7 +143,7 @@ def generar_excel_alumno(
     ocupacion,
     docs_list,
 ):
-    """Rellena la plantilla Excel con los datos del alumno y ajusta tipografías requeridas."""
+    """Rellena la plantilla Excel con los datos del alumno y aplica las fuentes/formatos requeridos."""
     if not os.path.exists(PLANTILLA_EXCEL):
         return None
 
@@ -157,12 +157,12 @@ def generar_excel_alumno(
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 1
 
-    # AJUSTE SOLICITADO: Linea 25 (D25 a V25) con Arial 10
+    # Linea 25 (D25 a V25) con Arial 10
     font_arial_10_bold = Font(name="Arial", size=10, bold=True)
     if sheet["D25"].value:
         sheet["D25"].font = font_arial_10_bold
 
-    # AJUSTE SOLICITADO: Linea 31 (A31 a V31) con Arial 9
+    # Linea 31 (A31 a V31) con Arial 9
     font_arial_9_bold = Font(name="Arial", size=9, bold=True)
     if sheet["A31"].value:
         sheet["A31"].font = font_arial_9_bold
@@ -210,8 +210,8 @@ def generar_excel_alumno(
     escribir_celda_segura(sheet, "H24", domicilio)
 
     # --- MANEJO DE FILA 26: 2DO DOMICILIO O NOTA POR DEFECTO ---
-    if dom_diferente and segundo_domicilio:
-        texto_f26 = f"2DO DOMICILIO TUTOR: {segundo_domicilio}"
+    if dom_diferente and segundo_domicilio.strip():
+        texto_f26 = f"2DO DOMICILIO TUTOR: {segundo_domicilio.strip()}"
         font_f26 = Font(name="Arial", size=8, bold=True)
     else:
         texto_f26 = (
@@ -249,7 +249,7 @@ def generar_excel_alumno(
         if doc_num_str in cell_docs_map:
             escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
-    # --- FECHA EN FILA 41 (FORMATO EXACTO) ---
+    # --- FECHA EN FILA 41 (FORMATO EXACTO PLANTILLA) ---
     hoy = datetime.date.today()
     meses_es = [
         "ENERO",
@@ -347,14 +347,14 @@ with tab1:
             "Domicilio del Tutor (Calle, No., Colonia, Localidad, Municipio):"
         )
 
-        dom_dif_check = st.checkbox(
-            "¿El domicilio del tutor es DIFERENTE al del alumno?"
+        col_dom1, col_dom2 = st.columns([1, 2])
+        dom_dif_check = col_dom1.checkbox(
+            "¿Domicilio DIFERENTE al del alumno?"
         )
-        segundo_domicilio = ""
-        if dom_dif_check:
-            segundo_domicilio = st.text_input(
-                "Especifique el 2do domicilio del tutor (Presentar ambos comprobantes):"
-            )
+        segundo_domicilio = col_dom2.text_input(
+            "Especificar 2do Domicilio del Tutor (Si aplica):",
+            placeholder="Ingrese el 2do domicilio si seleccionó la casilla...",
+        )
 
         col_tut1, col_tut2, col_tut3 = st.columns(3)
         celular_tutor = col_tut1.text_input("Celular del Tutor:")
@@ -740,11 +740,12 @@ with tab2:
                     value=str(row_sel["domicilio"] or ""),
                 )
 
-                e_dom_dif = st.checkbox(
-                    "¿Domicilio diferente al del alumno?",
+                col_edom1, col_edom2 = st.columns([1, 2])
+                e_dom_dif = col_edom1.checkbox(
+                    "¿Domicilio diferente?",
                     value=bool(row_sel.get("dom_diferente", 0)),
                 )
-                e_seg_dom = st.text_input(
+                e_seg_dom = col_edom2.text_input(
                     "Segundo Domicilio Tutor:",
                     value=str(row_sel.get("segundo_domicilio", "") or ""),
                 )
