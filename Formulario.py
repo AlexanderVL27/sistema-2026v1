@@ -7,7 +7,9 @@ from openpyxl.styles import Alignment, Font
 import pandas as pd
 import streamlit as st
 
-# Configuración inicial de la página
+# ==========================================
+# CONFIGURACIÓN INICIAL DE LA PÁGINA
+# ==========================================
 st.set_page_config(
     page_title="Sistema de Inscripción 2026", page_icon="📝", layout="wide"
 )
@@ -157,12 +159,12 @@ def generar_excel_alumno(
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 1
 
-    # Linea 25 (D25 a V25) con Arial 10
+    # Línea 25 (D25 a V25) con Arial 10
     font_arial_10_bold = Font(name="Arial", size=10, bold=True)
     if sheet["D25"].value:
         sheet["D25"].font = font_arial_10_bold
 
-    # Linea 31 (A31 a V31) con Arial 9
+    # Línea 31 (A31 a V31) con Arial 9
     font_arial_9_bold = Font(name="Arial", size=9, bold=True)
     if sheet["A31"].value:
         sheet["A31"].font = font_arial_9_bold
@@ -287,11 +289,11 @@ def generar_excel_alumno(
     return excel_buffer.getvalue()
 
 
-# Inicializar tabla al arrancar
+# Inicializar la base de datos al iniciar el programa
 inicializar_db()
 
 # ==========================================
-# INTERFAZ Y NAVEGACIÓN
+# INTERFAZ Y NAVEGACIÓN DE STREAMLIT
 # ==========================================
 tab1, tab2 = st.tabs(["📝 Formulario de Inscripción", "🔒 Panel Administrador"])
 
@@ -299,33 +301,10 @@ tab1, tab2 = st.tabs(["📝 Formulario de Inscripción", "🔒 Panel Administrad
 with tab1:
     st.title("📝 Solicitud de Inscripción 2026")
 
-    # Inicializar estado interactivo para la casilla del domicilio
-    if "dom_diferente_active" not in st.session_state:
-        st.session_state.dom_diferente_active = False
-
-    # 1. CONTROL REACTIVO (Fuera del contenedor estático)
-    st.subheader("3. Datos del Tutor")
-
-    col_dom1, col_dom2 = st.columns([1, 2])
-    dom_dif_check = col_dom1.checkbox(
-        "¿El domicilio del tutor es DIFERENTE al del alumno?",
-        key="dom_dif_check_key",
-    )
-
-    # El campo de texto estará desactivado (disabled) si la casilla NO está marcada
-    segundo_domicilio = col_dom2.text_input(
-        "Especifique el 2do domicilio del tutor:",
-        placeholder=(
-            "Escriba aquí el segundo domicilio..."
-            if dom_dif_check
-            else "Active la casilla si requiere ingresar otro domicilio"
-        ),
-        disabled=not dom_dif_check,
-        key="segundo_domicilio_key",
-    )
-
-    # 2. FORMULARIO PRINCIPAL
-    with st.form("form_inscripcion", clear_on_submit=False):
+    # Usamos un solo contenedor de formulario para enviar toda la información junta
+    with st.form("form_inscripcion_completo", clear_on_submit=False):
+        
+        # --- SECCIÓN 1: DATOS PERSONALES ---
         st.header("1. Datos Personales del Alumno")
         nombre_alumno = st.text_input("Nombre completo del Alumno:")
 
@@ -347,6 +326,7 @@ with tab1:
         correo = col_c2.text_input("Correo electrónico:")
         red_social = st.text_input("Red Social:")
 
+        # --- SECCIÓN 2: DATOS ACADÉMICOS ---
         st.header("2. Datos Académicos")
         col_a1, col_a2 = st.columns(2)
         curp = col_a1.text_input("CURP del Alumno:")
@@ -367,7 +347,8 @@ with tab1:
         )
         observaciones = st.text_input("Observaciones:")
 
-        st.header("3. Detalles Adicionales del Tutor")
+        # --- SECCIÓN 3: DATOS DEL TUTOR ---
+        st.header("3. Datos del Tutor")
         nombre_tutor = st.text_input("Nombre completo del Tutor:")
         domicilio = st.text_input(
             "Domicilio Principal del Tutor (Calle, No., Colonia, Localidad, Municipio):"
@@ -379,6 +360,7 @@ with tab1:
         tel_emergencia = col_tut3.text_input("Teléfono de Emergencia:")
         ocupacion = st.text_input("Ocupación del Tutor:")
 
+        # --- SECCIÓN 4: DOCUMENTACIÓN ---
         st.header("4. Documentación Entregada")
         col_d1, col_d2 = st.columns(2)
         doc1 = col_d1.checkbox("1.- Voucher de Pago Original")
@@ -394,11 +376,35 @@ with tab1:
         doc10 = col_d2.checkbox("10.- CURP Tutor")
         doc11 = col_d2.checkbox("11.- 3 Fotografías Infantil")
 
-        enviado = st.form_submit_button("💾 GUARDAR SOLICITUD LOCALMENTE")
+        enviado = st.form_submit_button("💾 GUARDAR SOLICITUD LOCALMENTE", use_container_width=True)
 
+    # --- SECCIÓN DINÁMICA DE DOMICILIO SEGUNDARIO (UBICADA DEBAJO DE LOS DATOS DEL TUTOR) ---
+    # Para permitir la activación/desactivación en tiempo real del segundo domicilio,
+    # el control interactivo se coloca fuera del formulario estático.
+    st.markdown("#### 🏡 Domicilio Secundario del Tutor")
+    col_dom1, col_dom2 = st.columns([1, 2])
+    
+    dom_dif_check = col_dom1.checkbox(
+        "¿El domicilio del tutor es DIFERENTE al del alumno?",
+        key="chk_domicilio_diferente",
+    )
+
+    segundo_domicilio = col_dom2.text_input(
+        "Especifique el 2do domicilio del tutor:",
+        placeholder=(
+            "Escriba aquí el segundo domicilio..."
+            if dom_dif_check
+            else "Active la casilla para habilitar este campo"
+        ),
+        disabled=not dom_dif_check,  # Se desactiva/activa dinámicamente según el checkbox
+        key="txt_segundo_domicilio",
+    )
+    st.markdown("---")
+
+    # PROCESAMIENTO TRAS PRESIONAR EL BOTÓN DE GUARDAR
     if enviado:
         if not nombre_alumno or not curp:
-            st.error("⚠️ Debes llenar al menos Nombre del Alumno y CURP.")
+            st.error("⚠️ Debes llenar al menos el Nombre del Alumno y la CURP.")
         else:
             try:
                 dia_nac = f"{fecha_nac.day:02d}"
@@ -422,7 +428,7 @@ with tab1:
                     str(i) for i, chk in enumerate(docs_checks, 1) if chk
                 ]
 
-                # 1. Guardar en SQLite local
+                # 1. Guardar en la Base de Datos SQLite local
                 datos_alumno = (
                     nombre_alumno,
                     curp,
@@ -453,10 +459,10 @@ with tab1:
                 guardar_en_db(datos_alumno)
 
                 st.success(
-                    "✅ ¡Inscripción guardada correctamente en la BBDD local!"
+                    "✅ ¡Inscripción guardada correctamente en la Base de Datos local!"
                 )
 
-                # 2. Generar Excel rellenado
+                # 2. Generar archivo Excel rellenado
                 bytes_excel = generar_excel_alumno(
                     nombre_alumno,
                     dia_nac,
@@ -510,7 +516,7 @@ with tab1:
 # --- TAB 2: PANEL ADMINISTRADOR ---
 with tab2:
     st.title("🔒 Panel Administrador")
-    pass_input = st.text_input("Contraseña:", type="password")
+    pass_input = st.text_input("Contraseña de acceso:", type="password")
 
     if pass_input == PASSWORD_ADMIN:
 
