@@ -299,6 +299,32 @@ tab1, tab2 = st.tabs(["📝 Formulario de Inscripción", "🔒 Panel Administrad
 with tab1:
     st.title("📝 Solicitud de Inscripción 2026")
 
+    # Inicializar estado interactivo para la casilla del domicilio
+    if "dom_diferente_active" not in st.session_state:
+        st.session_state.dom_diferente_active = False
+
+    # 1. CONTROL REACTIVO (Fuera del contenedor estático)
+    st.subheader("3. Datos del Tutor")
+
+    col_dom1, col_dom2 = st.columns([1, 2])
+    dom_dif_check = col_dom1.checkbox(
+        "¿El domicilio del tutor es DIFERENTE al del alumno?",
+        key="dom_dif_check_key",
+    )
+
+    # El campo de texto estará desactivado (disabled) si la casilla NO está marcada
+    segundo_domicilio = col_dom2.text_input(
+        "Especifique el 2do domicilio del tutor:",
+        placeholder=(
+            "Escriba aquí el segundo domicilio..."
+            if dom_dif_check
+            else "Active la casilla si requiere ingresar otro domicilio"
+        ),
+        disabled=not dom_dif_check,
+        key="segundo_domicilio_key",
+    )
+
+    # 2. FORMULARIO PRINCIPAL
     with st.form("form_inscripcion", clear_on_submit=False):
         st.header("1. Datos Personales del Alumno")
         nombre_alumno = st.text_input("Nombre completo del Alumno:")
@@ -341,19 +367,10 @@ with tab1:
         )
         observaciones = st.text_input("Observaciones:")
 
-        st.header("3. Datos del Tutor")
+        st.header("3. Detalles Adicionales del Tutor")
         nombre_tutor = st.text_input("Nombre completo del Tutor:")
         domicilio = st.text_input(
-            "Domicilio del Tutor (Calle, No., Colonia, Localidad, Municipio):"
-        )
-
-        col_dom1, col_dom2 = st.columns([1, 2])
-        dom_dif_check = col_dom1.checkbox(
-            "¿Domicilio DIFERENTE al del alumno?"
-        )
-        segundo_domicilio = col_dom2.text_input(
-            "Especificar 2do Domicilio del Tutor (Si aplica):",
-            placeholder="Ingrese el 2do domicilio si seleccionó la casilla...",
+            "Domicilio Principal del Tutor (Calle, No., Colonia, Localidad, Municipio):"
         )
 
         col_tut1, col_tut2, col_tut3 = st.columns(3)
