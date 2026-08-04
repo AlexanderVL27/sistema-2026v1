@@ -1,6 +1,7 @@
 import datetime
 import os
 import sqlite3
+import zipfile
 from io import BytesIO
 import openpyxl
 from openpyxl.styles import Alignment, Font
@@ -567,77 +568,104 @@ with tab2:
                 )
 
         st.markdown("---")
-        st.subheader("📄 Descargar Solicitud Individual en Excel")
+        # ==========================================
+        # DESCARGA MULTIPLE Y DE INDIVIDUALES EN EXCEL
+        # ==========================================
+        st.subheader("📦 Descarga Masiva o Individual de Solicitudes en Excel")
         if not df_alumnos.empty:
-            col_sel1, col_sel2 = st.columns([3, 1])
-
-            opciones_alumnos_excel = {
+            
+            opciones_alumnos_map = {
                 f"{r['nombre_alumno']} - CURP: {r['curp']}": r
                 for _, r in df_alumnos.iterrows()
             }
+            
+            lista_etiquetas = list(opciones_alumnos_map.keys())
 
-            alumno_escogido = col_sel1.selectbox(
-                "Selecciona un alumno para generar su Excel rellenado:",
-                list(opciones_alumnos_excel.keys()),
+            col_btn_a, col_btn_b = st.columns(2)
+            if col_btn_a.button("Select All (Seleccionar Todos)"):
+                st.session_state["alumnos_seleccionados"] = lista_etiquetas
+            if col_btn_b.button("Clear All (Desmarcar Todos)"):
+                st.session_state["alumnos_seleccionados"] = []
+
+            seleccionados = st.multiselect(
+                "Selecciona uno o varios alumnos para empaquetar sus archivos Excel:",
+                options=lista_etiquetas,
+                key="alumnos_seleccionados"
             )
 
-            r_al = opciones_alumnos_excel[alumno_escogido]
+            if seleccionados:
+                col_info, col_dl = st.columns([2, 1])
+                col_info.info(f"📋 **{len(seleccionados)}** alumno(s) seleccionado(s).")
+                
+                # Botón para procesar y empaquetar en ZIP
+                if col_dl.button("📦 Generar Paquete ZIP con Excels"):
+                    zip_buffer = BytesIO()
+                    
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        for etq in seleccionados:
+                            r_al = opciones_alumnos_map[etq]
+                            
+                            fnac_parts = (
+                                str(r_al["fecha_nacimiento"]).split("/")
+                                if r_al["fecha_nacimiento"]
+                                else ["", "", ""]
+                            )
+                            d_nac = fnac_parts[0] if len(fnac_parts) > 0 else ""
+                            m_nac = fnac_parts[1] if len(fnac_parts) > 1 else ""
+                            a_nac = fnac_parts[2] if len(fnac_parts) > 2 else ""
 
-            fnac_parts = (
-                str(r_al["fecha_nacimiento"]).split("/")
-                if r_al["fecha_nacimiento"]
-                else ["", "", ""]
-            )
-            d_nac = fnac_parts[0] if len(fnac_parts) > 0 else ""
-            m_nac = fnac_parts[1] if len(fnac_parts) > 1 else ""
-            a_nac = fnac_parts[2] if len(fnac_parts) > 2 else ""
+                            docs_entregados_list = (
+                                str(r_al["docs_entregados"]).split(",")
+                                if r_al["docs_entregados"]
+                                else []
+                            )
 
-            docs_entregados_list = (
-                str(r_al["docs_entregados"]).split(",")
-                if r_al["docs_entregados"]
-                else []
-            )
+                            bytes_excel_ind = generar_excel_alumno(
+                                r_al["nombre_alumno"],
+                                d_nac,
+                                m_nac,
+                                a_nac,
+                                r_al["edad"],
+                                r_al["lugar_nacimiento"],
+                                r_al["sexo"],
+                                r_al["celular_alumno"],
+                                r_al["correo"],
+                                r_al["red_social"],
+                                r_al["curp"],
+                                r_al["secundaria"],
+                                r_al["cct"],
+                                r_al["promedio"],
+                                r_al["carrera"],
+                                r_al["turno"],
+                                r_al["estatus"],
+                                r_al["observaciones"],
+                                r_al["nombre_tutor"],
+                                r_al["domicilio"],
+                                bool(r_al.get("dom_diferente", False)),
+                                r_al.get("segundo_domicilio", ""),
+                                r_al["celular_tutor"],
+                                r_al["tel_casa"],
+                                r_al["tel_emergencia"],
+                                r_al["ocupacion"],
+                                docs_entregados_list,
+                            )
 
-            bytes_excel_admin = generar_excel_alumno(
-                r_al["nombre_alumno"],
-                d_nac,
-                m_nac,
-                a_nac,
-                r_al["edad"],
-                r_al["lugar_nacimiento"],
-                r_al["sexo"],
-                r_al["celular_alumno"],
-                r_al["correo"],
-                r_al["red_social"],
-                r_al["curp"],
-                r_al["secundaria"],
-                r_al["cct"],
-                r_al["promedio"],
-                r_al["carrera"],
-                r_al["turno"],
-                r_al["estatus"],
-                r_al["observaciones"],
-                r_al["nombre_tutor"],
-                r_al["domicilio"],
-                bool(r_al.get("dom_diferente", False)),
-                r_al.get("segundo_domicilio", ""),
-                r_al["celular_tutor"],
-                r_al["tel_casa"],
-                r_al["tel_emergencia"],
-                r_al["ocupacion"],
-                docs_entregados_list,
-            )
+                            if bytes_excel_ind:
+                                nom_clean = "".join(
+                                    c for c in r_al["nombre_alumno"] if c.isalnum() or c == " "
+                                ).strip()
+                                nombre_archivo_excel = f"SOLICITUD_{nom_clean}_{r_al['curp']}.xlsx"
+                                zip_file.writestr(nombre_archivo_excel, bytes_excel_ind)
 
-            if bytes_excel_admin:
-                nom_clean = "".join(
-                    c for c in r_al["nombre_alumno"] if c.isalnum() or c == " "
-                ).strip()
-                col_sel2.download_button(
-                    label="📄 Descargar Excel Solicitud",
-                    data=bytes_excel_admin,
-                    file_name=f"SOLICITUD_{nom_clean}_{r_al['curp']}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+                    zip_buffer.seek(0)
+                    
+                    st.download_button(
+                        label="⬇️ DESCARGAR ARCHIVO ZIP DE SOLICITUDES",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"SOLICITUDES_EXCEL_{datetime.date.today().strftime('%Y%m%d')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
 
         with st.expander("⚠️ Opción Temporal: Vaciar / Eliminar Base de Datos"):
             st.warning(
