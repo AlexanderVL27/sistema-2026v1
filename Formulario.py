@@ -301,66 +301,86 @@ tab1, tab2 = st.tabs(["📝 Formulario de Inscripción", "🔒 Panel Administrad
 with tab1:
     st.title("📝 Solicitud de Inscripción 2026")
 
-    # Usamos un solo contenedor de formulario para enviar toda la información junta
-    with st.form("form_inscripcion_completo", clear_on_submit=False):
-        
-        # --- SECCIÓN 1: DATOS PERSONALES ---
-        st.header("1. Datos Personales del Alumno")
-        nombre_alumno = st.text_input("Nombre completo del Alumno:")
+    # --- BLOQUE 1: DATOS PERSONALES Y ACADÉMICOS ---
+    st.header("1. Datos Personales del Alumno")
+    nombre_alumno = st.text_input("Nombre completo del Alumno:", key="f_nombre")
 
-        col_f1, col_f2 = st.columns([2, 1])
-        fecha_nac = col_f1.date_input(
-            "Fecha de Nacimiento:",
-            value=datetime.date(2010, 1, 1),
-            min_value=datetime.date(1990, 1, 1),
-            max_value=datetime.date.today(),
-            format="DD/MM/YYYY",
-        )
-        edad = col_f2.text_input("Años (Edad):")
+    col_f1, col_f2 = st.columns([2, 1])
+    fecha_nac = col_f1.date_input(
+        "Fecha de Nacimiento:",
+        value=datetime.date(2010, 1, 1),
+        min_value=datetime.date(1990, 1, 1),
+        max_value=datetime.date.today(),
+        format="DD/MM/YYYY",
+        key="f_fnac",
+    )
+    edad = col_f2.text_input("Años (Edad):", key="f_edad")
 
-        lugar_nac = st.text_input("Lugar de Nacimiento:")
-        sexo = st.radio("Sexo:", ["FEMENINO", "MASCULINO"], horizontal=True)
+    lugar_nac = st.text_input("Lugar de Nacimiento:", key="f_lugarnac")
+    sexo = st.radio("Sexo:", ["FEMENINO", "MASCULINO"], horizontal=True, key="f_sexo")
 
-        col_c1, col_c2 = st.columns(2)
-        celular_alumno = col_c1.text_input("Celular del Alumno:")
-        correo = col_c2.text_input("Correo electrónico:")
-        red_social = st.text_input("Red Social:")
+    col_c1, col_c2 = st.columns(2)
+    celular_alumno = col_c1.text_input("Celular del Alumno:", key="f_celalumno")
+    correo = col_c2.text_input("Correo electrónico:", key="f_correo")
+    red_social = st.text_input("Red Social:", key="f_redsocial")
 
-        # --- SECCIÓN 2: DATOS ACADÉMICOS ---
-        st.header("2. Datos Académicos")
-        col_a1, col_a2 = st.columns(2)
-        curp = col_a1.text_input("CURP del Alumno:")
-        promedio = col_a2.text_input("Promedio de Secundaria:")
+    st.header("2. Datos Académicos")
+    col_a1, col_a2 = st.columns(2)
+    curp = col_a1.text_input("CURP del Alumno:", key="f_curp")
+    promedio = col_a2.text_input("Promedio de Secundaria:", key="f_promedio")
 
-        secundaria = st.text_input("Secundaria de procedencia:")
-        cct = st.text_input("CCT de la Secundaria:")
-        carrera = st.text_input("Aceptado en la Carrera de:")
+    secundaria = st.text_input("Secundaria de procedencia:", key="f_secundaria")
+    cct = st.text_input("CCT de la Secundaria:", key="f_cct")
+    carrera = st.text_input("Aceptado en la Carrera de:", key="f_carrera")
 
-        col_t1, col_t2 = st.columns(2)
-        turno = col_t1.radio(
-            "Turno:", ["MATUTINO", "VESPERTINO"], horizontal=True
-        )
-        estatus = col_t2.radio(
-            "Resultado:",
-            ["ASIGNADO", "CAMBIO", "OTRO RESULTADO", "SIN PROCESO"],
-            horizontal=True,
-        )
-        observaciones = st.text_input("Observaciones:")
+    col_t1, col_t2 = st.columns(2)
+    turno = col_t1.radio(
+        "Turno:", ["MATUTINO", "VESPERTINO"], horizontal=True, key="f_turno"
+    )
+    estatus = col_t2.radio(
+        "Resultado:",
+        ["ASIGNADO", "CAMBIO", "OTRO RESULTADO", "SIN PROCESO"],
+        horizontal=True,
+        key="f_estatus",
+    )
+    observaciones = st.text_input("Observaciones:", key="f_obs")
 
-        # --- SECCIÓN 3: DATOS DEL TUTOR ---
-        st.header("3. Datos del Tutor")
-        nombre_tutor = st.text_input("Nombre completo del Tutor:")
-        domicilio = st.text_input(
-            "Domicilio Principal del Tutor (Calle, No., Colonia, Localidad, Municipio):"
-        )
+    # --- BLOQUE 2: DATOS DEL TUTOR (SECCIÓN INTERACTIVA INTEGRADA AQUÍ) ---
+    st.header("3. Datos del Tutor")
+    nombre_tutor = st.text_input("Nombre completo del Tutor:", key="f_tutor")
+    domicilio = st.text_input(
+        "Domicilio Principal del Tutor (Calle, No., Colonia, Localidad, Municipio):",
+        key="f_domicilio",
+    )
 
-        col_tut1, col_tut2, col_tut3 = st.columns(3)
-        celular_tutor = col_tut1.text_input("Celular del Tutor:")
-        tel_casa = col_tut2.text_input("Teléfono de Casa:")
-        tel_emergencia = col_tut3.text_input("Teléfono de Emergencia:")
-        ocupacion = st.text_input("Ocupación del Tutor:")
+    # Sub-sección interactiva de 2do Domicilio (Colocada exactamente aquí)
+    st.markdown("##### 🏡 Domicilio Secundario del Tutor")
+    col_dom1, col_dom2 = st.columns([1, 2])
 
-        # --- SECCIÓN 4: DOCUMENTACIÓN ---
+    dom_dif_check = col_dom1.checkbox(
+        "¿El domicilio del tutor es DIFERENTE al del alumno?",
+        key="chk_domicilio_diferente",
+    )
+
+    segundo_domicilio = col_dom2.text_input(
+        "Especifique el 2do domicilio del tutor:",
+        placeholder=(
+            "Escriba aquí el segundo domicilio..."
+            if dom_dif_check
+            else "Active la casilla de la izquierda para habilitar este campo"
+        ),
+        disabled=not dom_dif_check,  # Se habilita/deshabilita al instante
+        key="txt_segundo_domicilio",
+    )
+
+    col_tut1, col_tut2, col_tut3 = st.columns(3)
+    celular_tutor = col_tut1.text_input("Celular del Tutor:", key="f_celtutor")
+    tel_casa = col_tut2.text_input("Teléfono de Casa:", key="f_telcasa")
+    tel_emergencia = col_tut3.text_input("Teléfono de Emergencia:", key="f_telemerg")
+    ocupacion = st.text_input("Ocupación del Tutor:", key="f_ocupacion")
+
+    # --- BLOQUE 3: DOCUMENTACIÓN Y BOTÓN DE ENVÍO ---
+    with st.form("form_documentos_y_guardado", clear_on_submit=False):
         st.header("4. Documentación Entregada")
         col_d1, col_d2 = st.columns(2)
         doc1 = col_d1.checkbox("1.- Voucher de Pago Original")
@@ -376,30 +396,9 @@ with tab1:
         doc10 = col_d2.checkbox("10.- CURP Tutor")
         doc11 = col_d2.checkbox("11.- 3 Fotografías Infantil")
 
-        enviado = st.form_submit_button("💾 GUARDAR SOLICITUD LOCALMENTE", use_container_width=True)
-
-    # --- SECCIÓN DINÁMICA DE DOMICILIO SEGUNDARIO (UBICADA DEBAJO DE LOS DATOS DEL TUTOR) ---
-    # Para permitir la activación/desactivación en tiempo real del segundo domicilio,
-    # el control interactivo se coloca fuera del formulario estático.
-    st.markdown("#### 🏡 Domicilio Secundario del Tutor")
-    col_dom1, col_dom2 = st.columns([1, 2])
-    
-    dom_dif_check = col_dom1.checkbox(
-        "¿El domicilio del tutor es DIFERENTE al del alumno?",
-        key="chk_domicilio_diferente",
-    )
-
-    segundo_domicilio = col_dom2.text_input(
-        "Especifique el 2do domicilio del tutor:",
-        placeholder=(
-            "Escriba aquí el segundo domicilio..."
-            if dom_dif_check
-            else "Active la casilla para habilitar este campo"
-        ),
-        disabled=not dom_dif_check,  # Se desactiva/activa dinámicamente según el checkbox
-        key="txt_segundo_domicilio",
-    )
-    st.markdown("---")
+        enviado = st.form_submit_button(
+            "💾 GUARDAR SOLICITUD LOCALMENTE", use_container_width=True
+        )
 
     # PROCESAMIENTO TRAS PRESIONAR EL BOTÓN DE GUARDAR
     if enviado:
