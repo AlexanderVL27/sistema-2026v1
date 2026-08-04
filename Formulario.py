@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="Sistema de Inscripción 2026", page_icon="📝", layout="wide"
 )
 
-PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "admin123")
+PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "Quetzales2")
 DB_FILE = "inscripciones.db"
 PLANTILLA_EXCEL = "SOLIC INSCRIP NVO 2026.xlsx"
 
