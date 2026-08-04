@@ -1,3 +1,4 @@
+import datetime
 import os
 import sqlite3
 from io import BytesIO
@@ -145,7 +146,7 @@ def generar_excel_alumno(
     escribir_celda_segura(sheet, "U5", edad)
     escribir_celda_segura(sheet, "I8", lugar_nac)
 
-    # --- CORRECCIÓN CELDAS DE SEXO (V8 Y V9) ---
+    # --- CELDAS DE SEXO (V8 Y V9) ---
     sexo_clean = str(sexo).strip().upper() if sexo else ""
     if sexo_clean == "FEMENINO":
         escribir_celda_segura(sheet, "V8", "X")
@@ -203,6 +204,27 @@ def generar_excel_alumno(
         if doc_num_str in cell_docs_map:
             escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
+    # --- FECHA AUTOMÁTICA EN LA FILA 41 (A41) ---
+    hoy = datetime.date.today()
+    meses_es = [
+        "ENERO",
+        "FEBRERO",
+        "MARZO",
+        "ABRIL",
+        "MAYO",
+        "JUNIO",
+        "JULIO",
+        "AGOSTO",
+        "SEPTIEMBRE",
+        "OCTUBRE",
+        "NOVIEMBRE",
+        "DICIEMBRE",
+    ]
+    nombre_mes = meses_es[hoy.month - 1]
+    texto_fecha_completa = f"COL. NETZAHUALCOYOTL, TEXCOCO, MEXICO. A {hoy.day:02d} DE {nombre_mes} DEL {hoy.year}"
+
+    escribir_celda_segura(sheet, "A41", texto_fecha_completa)
+
     excel_buffer = BytesIO()
     wb.save(excel_buffer)
     excel_buffer.seek(0)
@@ -225,11 +247,15 @@ with tab1:
         st.header("1. Datos Personales del Alumno")
         nombre_alumno = st.text_input("Nombre completo del Alumno:")
 
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-        dia_nac = col_f1.text_input("Día (DD):")
-        mes_nac = col_f2.text_input("Mes (MM):")
-        anio_nac = col_f3.text_input("Año (AAAA):")
-        edad = col_f4.text_input("Años (Edad):")
+        col_f1, col_f2 = st.columns([2, 1])
+        fecha_nac = col_f1.date_input(
+            "Fecha de Nacimiento:",
+            value=datetime.date(2010, 1, 1),
+            min_value=datetime.date(1990, 1, 1),
+            max_value=datetime.date.today(),
+            format="DD/MM/YYYY",
+        )
+        edad = col_f2.text_input("Años (Edad):")
 
         lugar_nac = st.text_input("Lugar de Nacimiento:")
         sexo = st.radio("Sexo:", ["FEMENINO", "MASCULINO"], horizontal=True)
@@ -291,6 +317,11 @@ with tab1:
             st.error("⚠️ Debes llenar al menos Nombre del Alumno y CURP.")
         else:
             try:
+                # Extraer día, mes y año de la fecha seleccionada
+                dia_nac = f"{fecha_nac.day:02d}"
+                mes_nac = f"{fecha_nac.month:02d}"
+                anio_nac = str(fecha_nac.year)
+
                 # Recopilar documentos marcados
                 docs_checks = [
                     doc1,
