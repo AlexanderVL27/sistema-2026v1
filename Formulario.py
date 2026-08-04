@@ -93,6 +93,14 @@ def obtener_alumnos():
     )
 
 
+def escribir_celda_segura(sheet, celda, valor):
+    """Escribe en una celda ignorando AttributeError por celdas combinadas secundarias."""
+    try:
+        sheet[celda] = valor
+    except AttributeError:
+        pass
+
+
 # ==========================================
 # FUNCIÓN PARA GENERAR EXCEL RELLENADO
 # ==========================================
@@ -130,36 +138,34 @@ def generar_excel_alumno(
     wb = openpyxl.load_workbook(PLANTILLA_EXCEL)
     sheet = wb.active
 
-    sheet["G2"] = nombre_alumno
-    sheet["I5"], sheet["M5"], sheet["Q5"], sheet["U5"] = (
-        dia_nac,
-        mes_nac,
-        anio_nac,
-        edad,
-    )
-    sheet["I8"] = lugar_nac
-    if sexo == "FEMENINO":
-        sheet["R8"] = "X"
-    elif sexo == "MASCULINO":
-        sheet["R9"] = "X"
+    escribir_celda_segura(sheet, "G2", nombre_alumno)
+    escribir_celda_segura(sheet, "I5", dia_nac)
+    escribir_celda_segura(sheet, "M5", mes_nac)
+    escribir_celda_segura(sheet, "Q5", anio_nac)
+    escribir_celda_segura(sheet, "U5", edad)
+    escribir_celda_segura(sheet, "I8", lugar_nac)
 
-    sheet["I10"], sheet["I11"], sheet["J12"] = (
-        celular_alumno,
-        correo,
-        red_social,
-    )
-    sheet["E14"], sheet["I15"], sheet["H16"], sheet["T16"], sheet["H17"] = (
-        curp,
-        secundaria,
-        cct,
-        promedio,
-        carrera,
-    )
+    # --- CORRECCIÓN CELDAS DE SEXO (V8 Y V9) ---
+    sexo_clean = str(sexo).strip().upper() if sexo else ""
+    if sexo_clean == "FEMENINO":
+        escribir_celda_segura(sheet, "V8", "X")
+    elif sexo_clean == "MASCULINO":
+        escribir_celda_segura(sheet, "V9", "X")
+
+    escribir_celda_segura(sheet, "I10", celular_alumno)
+    escribir_celda_segura(sheet, "I11", correo)
+    escribir_celda_segura(sheet, "J12", red_social)
+
+    escribir_celda_segura(sheet, "E14", curp)
+    escribir_celda_segura(sheet, "I15", secundaria)
+    escribir_celda_segura(sheet, "H16", cct)
+    escribir_celda_segura(sheet, "T16", promedio)
+    escribir_celda_segura(sheet, "H17", carrera)
 
     if turno == "MATUTINO":
-        sheet["H18"] = "X"
+        escribir_celda_segura(sheet, "H18", "X")
     elif turno == "VESPERTINO":
-        sheet["M18"] = "X"
+        escribir_celda_segura(sheet, "M18", "X")
 
     map_estatus = {
         "ASIGNADO": "D19",
@@ -168,19 +174,15 @@ def generar_excel_alumno(
         "SIN PROCESO": "V19",
     }
     if estatus in map_estatus:
-        sheet[map_estatus[estatus]] = "X"
+        escribir_celda_segura(sheet, map_estatus[estatus], "X")
 
-    sheet["Q18"] = observaciones
-    sheet["G22"], sheet["H24"], sheet["I27"], sheet["I28"], sheet["I29"], (
-        sheet["I30"]
-    ) = (
-        nombre_tutor,
-        domicilio,
-        celular_tutor,
-        tel_casa,
-        tel_emergencia,
-        ocupacion,
-    )
+    escribir_celda_segura(sheet, "Q18", observaciones)
+    escribir_celda_segura(sheet, "G22", nombre_tutor)
+    escribir_celda_segura(sheet, "H24", domicilio)
+    escribir_celda_segura(sheet, "I27", celular_tutor)
+    escribir_celda_segura(sheet, "I28", tel_casa)
+    escribir_celda_segura(sheet, "I29", tel_emergencia)
+    escribir_celda_segura(sheet, "I30", ocupacion)
 
     # Mapeo de casillas de documentos entregados (del 1 al 11)
     cell_docs_map = {
@@ -199,7 +201,7 @@ def generar_excel_alumno(
     for doc_num in docs_list:
         doc_num_str = str(doc_num).strip()
         if doc_num_str in cell_docs_map:
-            sheet[cell_docs_map[doc_num_str]] = "X"
+            escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
     excel_buffer = BytesIO()
     wb.save(excel_buffer)
