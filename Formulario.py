@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="Sistema de Inscripción 2026", page_icon="📝", layout="wide"
 )
 
-PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "Quetzales2")
+PASSWORD_ADMIN = st.secrets.get("PASSWORD_ADMIN", "admin123")
 DB_FILE = "inscripciones.db"
 PLANTILLA_EXCEL = "SOLIC INSCRIP NVO 2026.xlsx"
 
@@ -90,6 +90,17 @@ def actualizar_en_db(id_alumno, datos):
         WHERE id=?
     """,
         (*datos, id_alumno),
+    )
+    conn.commit()
+
+
+def actualizar_docs_en_db(id_alumno, cadena_docs):
+    """Actualiza únicamente la columna de documentos entregados."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE alumnos SET docs_entregados=? WHERE id=?",
+        (cadena_docs, id_alumno),
     )
     conn.commit()
 
@@ -199,7 +210,9 @@ def generar_excel_alumno(
     elif turno == "VESPERTINO":
         escribir_celda_segura(sheet, "M18", "X")
 
+    # Mapeo del Resultado (Mapea 'FOLIO DE ASIGNACIÓN' o 'ASIGNADO' a D19)
     map_estatus = {
+        "FOLIO DE ASIGNACIÓN": "D19",
         "ASIGNADO": "D19",
         "CAMBIO": "H19",
         "OTRO RESULTADO": "N19",
@@ -252,7 +265,7 @@ def generar_excel_alumno(
         if doc_num_str in cell_docs_map:
             escribir_celda_segura(sheet, cell_docs_map[doc_num_str], "X")
 
-    # --- FECHA EN FILA 41 (FORMATO EXACTO PLANTILLA) ---
+    # --- FECHA EN FILA 41 ---
     hoy = datetime.date.today()
     meses_es = [
         "ENERO",
@@ -292,6 +305,21 @@ def generar_excel_alumno(
 
 # Inicializar la base de datos al iniciar el programa
 inicializar_db()
+
+# DICCIONARIO OFICIAL DE DOCUMENTOS
+DOCS_OPCIONES = {
+    "1": "1.- Voucher de Pago Original",
+    "2": "2.- Comprobante de Asignación / Folio",
+    "3": "3.- Certificado de Secundaria",
+    "4": "4.- Boleta de 3er Año",
+    "5": "5.- CURP Alumno",
+    "6": "6.- Acta de Nacimiento",
+    "7": "7.- Certificado Médico",
+    "8": "8.- Comprobante Domicilio",
+    "9": "9.- INE Tutor",
+    "10": "10.- CURP Tutor",
+    "11": "11.- 3 Fotografías Infantil",
+}
 
 # ==========================================
 # INTERFAZ Y NAVEGACIÓN DE STREAMLIT
@@ -338,15 +366,16 @@ with tab1:
     turno = col_t1.radio(
         "Turno:", ["MATUTINO", "VESPERTINO"], horizontal=True, key="f_turno"
     )
+    # AQUÍ ESTÁ EL CAMBIO: "FOLIO DE ASIGNACIÓN" en lugar de "ASIGNADO"
     estatus = col_t2.radio(
         "Resultado:",
-        ["ASIGNADO", "CAMBIO", "OTRO RESULTADO", "SIN PROCESO"],
+        ["FOLIO DE ASIGNACIÓN", "CAMBIO", "OTRO RESULTADO", "SIN PROCESO"],
         horizontal=True,
         key="f_estatus",
     )
     observaciones = st.text_input("Observaciones:", key="f_obs")
 
-    # --- BLOQUE 2: DATOS DEL TUTOR (SECCIÓN INTERACTIVA INTEGRADA AQUÍ) ---
+    # --- BLOQUE 2: DATOS DEL TUTOR ---
     st.header("3. Datos del Tutor")
     nombre_tutor = st.text_input("Nombre completo del Tutor:", key="f_tutor")
     domicilio = st.text_input(
@@ -354,7 +383,6 @@ with tab1:
         key="f_domicilio",
     )
 
-    # Sub-sección interactiva de 2do Domicilio (Colocada exactamente aquí)
     st.markdown("##### 🏡 Domicilio Secundario del Tutor")
     col_dom1, col_dom2 = st.columns([1, 2])
 
@@ -370,7 +398,7 @@ with tab1:
             if dom_dif_check
             else "Active la casilla de la izquierda para habilitar este campo"
         ),
-        disabled=not dom_dif_check,  # Se habilita/deshabilita al instante
+        disabled=not dom_dif_check,
         key="txt_segundo_domicilio",
     )
 
@@ -380,29 +408,9 @@ with tab1:
     tel_emergencia = col_tut3.text_input("Teléfono de Emergencia:", key="f_telemerg")
     ocupacion = st.text_input("Ocupación del Tutor:", key="f_ocupacion")
 
-    # --- BLOQUE 3: DOCUMENTACIÓN Y BOTÓN DE ENVÍO ---
-    with st.form("form_documentos_y_guardado", clear_on_submit=False):
-        st.header("4. Documentación Entregada")
-        col_d1, col_d2 = st.columns(2)
-        doc1 = col_d1.checkbox("1.- Voucher de Pago Original")
-        doc2 = col_d1.checkbox("2.- Comprobante de Asignación")
-        doc3 = col_d1.checkbox("3.- Certificado de Secundaria")
-        doc4 = col_d1.checkbox("4.- Boleta de 3er Año")
-        doc5 = col_d1.checkbox("5.- CURP Alumno")
-        doc6 = col_d1.checkbox("6.- Acta de Nacimiento")
-        doc7 = col_d1.checkbox("7.- Certificado Médico")
-
-        doc8 = col_d2.checkbox("8.- Comprobante Domicilio")
-        doc9 = col_d2.checkbox("9.- INE Tutor")
-        doc10 = col_d2.checkbox("10.- CURP Tutor")
-        doc11 = col_d2.checkbox("11.- 3 Fotografías Infantil")
-
-        enviado = st.form_submit_button(
-            "💾 GUARDAR SOLICITUD LOCALMENTE", use_container_width=True
-        )
-
-    # PROCESAMIENTO TRAS PRESIONAR EL BOTÓN DE GUARDAR
-    if enviado:
+    # --- BLOQUE 3: BOTÓN DE ENVÍO DE FORMULARIO ---
+    st.markdown("---")
+    if st.button("💾 GUARDAR SOLICITUD LOCALMENTE", use_container_width=True, type="primary"):
         if not nombre_alumno or not curp:
             st.error("⚠️ Debes llenar al menos el Nombre del Alumno y la CURP.")
         else:
@@ -411,24 +419,10 @@ with tab1:
                 mes_nac = f"{fecha_nac.month:02d}"
                 anio_nac = str(fecha_nac.year)
 
-                docs_checks = [
-                    doc1,
-                    doc2,
-                    doc3,
-                    doc4,
-                    doc5,
-                    doc6,
-                    doc7,
-                    doc8,
-                    doc9,
-                    doc10,
-                    doc11,
-                ]
-                lista_docs = [
-                    str(i) for i, chk in enumerate(docs_checks, 1) if chk
-                ]
+                # Quedan vacíos por defecto hasta que el admin los marque
+                lista_docs_vacia = ""
 
-                # 1. Guardar en la Base de Datos SQLite local
+                # Guardar en SQLite
                 datos_alumno = (
                     nombre_alumno,
                     curp,
@@ -454,15 +448,15 @@ with tab1:
                     tel_casa,
                     tel_emergencia,
                     ocupacion,
-                    ",".join(lista_docs),
+                    lista_docs_vacia,
                 )
                 guardar_en_db(datos_alumno)
 
                 st.success(
-                    "✅ ¡Inscripción guardada correctamente en la Base de Datos local!"
+                    "✅ ¡Inscripción guardada correctamente! La entrega de documentos se revisará en Control Escolar."
                 )
 
-                # 2. Generar archivo Excel rellenado
+                # Generar Excel
                 bytes_excel = generar_excel_alumno(
                     nombre_alumno,
                     dia_nac,
@@ -490,7 +484,7 @@ with tab1:
                     tel_casa,
                     tel_emergencia,
                     ocupacion,
-                    lista_docs,
+                    [],
                 )
 
                 if bytes_excel:
@@ -502,10 +496,6 @@ with tab1:
                         data=bytes_excel,
                         file_name=f"SOLICITUD_{nombre_limpio}_{curp}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                else:
-                    st.warning(
-                        f"⚠️ No se encontró la plantilla `{PLANTILLA_EXCEL}` en el servidor para generar el archivo."
                     )
 
             except sqlite3.IntegrityError:
@@ -569,7 +559,49 @@ with tab2:
 
         st.markdown("---")
         # ==========================================
-        # DESCARGA MULTIPLE Y DE INDIVIDUALES EN EXCEL
+        # SECCIÓN 1: GESTIÓN DE DOCUMENTOS ENTREGADOS
+        # ==========================================
+        st.subheader("📋 Cotejo de Documentos Entregados (Control Escolar)")
+        if not df_alumnos.empty:
+            map_alumnos_docs = {
+                f"{r['nombre_alumno']} - CURP: {r['curp']}": r
+                for _, r in df_alumnos.iterrows()
+            }
+            sel_alum_doc = st.selectbox(
+                "Selecciona el alumno para cotejar/actualizar sus documentos:",
+                list(map_alumnos_docs.keys()),
+                key="sb_alum_docs"
+            )
+            r_doc_sel = map_alumnos_docs[sel_alum_doc]
+            
+            docs_actuales_str = str(r_doc_sel["docs_entregados"] or "")
+            docs_actuales = [d.strip() for d in docs_actuales_str.split(",") if d.strip()]
+
+            st.write("Selecciona los documentos físicos recibidos:")
+            
+            col_doc_a, col_doc_b = st.columns(2)
+            nuevos_docs_seleccionados = []
+
+            for num_k, txt_v in DOCS_OPCIONES.items():
+                col_target = col_doc_a if int(num_k) <= 7 else col_doc_b
+                marcado = col_target.checkbox(
+                    txt_v,
+                    value=(num_k in docs_actuales),
+                    key=f"chk_doc_{r_doc_sel['id']}_{num_k}"
+                )
+                if marcado:
+                    nuevos_docs_seleccionados.append(num_k)
+
+            if st.button("💾 Actualizar Documentos Entregados", type="primary"):
+                nuevos_docs_seleccionados.sort(key=int)
+                cadena_actualizada = ",".join(nuevos_docs_seleccionados)
+                actualizar_docs_en_db(r_doc_sel["id"], cadena_actualizada)
+                st.success(f"✅ Documentos actualizados correctamente para **{r_doc_sel['nombre_alumno']}**.")
+                st.rerun()
+
+        st.markdown("---")
+        # ==========================================
+        # SECCIÓN 2: DESCARGA MULTIPLE EN EXCEL (.ZIP)
         # ==========================================
         st.subheader("📦 Descarga Masiva o Individual de Solicitudes en Excel")
         if not df_alumnos.empty:
@@ -597,7 +629,6 @@ with tab2:
                 col_info, col_dl = st.columns([2, 1])
                 col_info.info(f"📋 **{len(seleccionados)}** alumno(s) seleccionado(s).")
                 
-                # Botón para procesar y empaquetar en ZIP
                 if col_dl.button("📦 Generar Paquete ZIP con Excels"):
                     zip_buffer = BytesIO()
                     
@@ -683,6 +714,9 @@ with tab2:
         st.dataframe(df_alumnos, use_container_width=True)
 
         st.markdown("---")
+        # ==========================================
+        # SECCIÓN 3: EDITAR EDICIÓN COMPLETA DE CAMPOS
+        # ==========================================
         st.subheader("✏️ Editar Cualquier Campo de un Alumno Registrado")
         if not df_alumnos.empty:
             opciones = {
@@ -762,7 +796,7 @@ with tab2:
                 )
 
                 opt_estatus = [
-                    "ASIGNADO",
+                    "FOLIO DE ASIGNACIÓN",
                     "CAMBIO",
                     "OTRO RESULTADO",
                     "SIN PROCESO",
@@ -773,7 +807,7 @@ with tab2:
                     else 0
                 )
                 e_estatus = col_ea6.selectbox(
-                    "Estatus:", opt_estatus, index=idx_estatus
+                    "Resultado / Estatus:", opt_estatus, index=idx_estatus
                 )
 
                 e_obs = st.text_input(
